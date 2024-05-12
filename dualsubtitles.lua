@@ -51,12 +51,12 @@ end
 return result
 end
 
---Functions
-
 function filterSubtitle(title)
 if not options.skipIgnoredSubtitles or title == nil then return true end
 return not hasValue(options.ignoredSubtitleMatch, title)
 end
+
+--Functions
 
 function setSubtitles()
 local subtitles = getSubtitleList()
@@ -84,11 +84,29 @@ if bottomSid > 0 then mp.set_property_native("sid", bottomSid) end
 if topSid > 0 then mp.set_property_native("secondary-sid", topSid) end
 end
 
-function switchForSecondary()
+function switchForwardForSecondary()
 local bottomSid, topSid = mp.get_property_number("sid"), mp.get_property_number("secondary-sid", 0)
 topSid = topSid + 1
 if topSid == bottomSid then topSid = topSid + 1 end
 if topSid > subtitleCount then
+mp.set_property_native("secondary-sid", 0)
+mp.osd_message("Secondary: no")
+else
+local subtitleInfo = getSubtitleInfo(topSid)
+    if subtitleInfo["title"] then
+    mp.osd_message(string.format("Secondary: (%s) %s (\"%s\")", subtitleInfo["id"], subtitleInfo["lang"], subtitleInfo["title"]))
+    else
+    mp.osd_message(string.format("Secondary: (%s) %s", subtitleInfo["id"], subtitleInfo["lang"]))
+    end
+mp.set_property_native("secondary-sid", topSid)
+end
+end
+
+function switchBackwardForSecondary()
+local bottomSid, topSid = mp.get_property_number("sid"), mp.get_property_number("secondary-sid", subtitleCount + 1)
+topSid = topSid - 1
+if topSid == bottomSid then topSid = topSid - 1 end
+if topSid == 0 then
 mp.set_property_native("secondary-sid", 0)
 mp.osd_message("Secondary: no")
 else
@@ -134,7 +152,8 @@ mp.osd_message("Subtitles hidden")
 end
 end
 
-mp.add_key_binding("k", "switchforsecondary", switchForSecondary)
+mp.add_key_binding("k", "switchforwardforsecondary", switchForwardForSecondary)
+mp.add_key_binding("K", "switchbackwardforsecondary", switchBackwardForSecondary)
 mp.add_key_binding("u", "reversesubtitles", reverseSubtitles)
 mp.add_key_binding("v", "hidesubtitles", hideSubtitles)
 
