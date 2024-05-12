@@ -8,7 +8,6 @@ options = {
 
 --Global Variables
 
-reversed = false
 hided = false
 hbid = 0
 htid = 0
@@ -103,16 +102,11 @@ local bottomSid, topSid = mp.get_property_number("sid", 0), mp.get_property_numb
 if bottomSid > 0 and topSid > 0 then
 mp.set_property_native("sid", 0)
 mp.set_property_native("secondary-sid", 0)
-    if reversed then
-    reversed = false
-    mp.set_property_native("sid", bottomSid)
-    mp.set_property_native("secondary-sid", topSid)
-    else
-    reversed = true
-    mp.set_property_native("sid", topSid)
-    mp.set_property_native("secondary-sid", bottomSid)
-    end
-mp.osd_message("Subtitles reversed")
+mp.set_property_native("sid", topSid)
+mp.set_property_native("secondary-sid", bottomSid)
+local subInfo1 = getSubtitleInfo(bottomSid)
+local subInfo2 = getSubtitleInfo(topSid)
+mp.osd_message(string.format("Top Subtitle: (%s) %s\nBottom Subtitle: (%s) %s", subInfo1["id"], subInfo1["lang"], subInfo2["id"], subInfo2["lang"]))
 else
 mp.osd_message("Subtitles not reversed")
 end
