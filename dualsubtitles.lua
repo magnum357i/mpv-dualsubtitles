@@ -53,13 +53,18 @@ end
 
 --Functions
 
+function filterSubtitle(title)
+if not options.skipIgnoredSubtitles or title == nil then return true end
+return not hasValue(options.ignoredSubtitleMatch, title)
+end
+
 function setSubtitles()
 local subtitles = getSubtitleList()
 local bottomSid, topSid = 0, 0
 subtitleCount = #subtitles
 for _, userBottomLang in ipairs(options.preferredLanguages["bottom"]) do
     for _, subtitle in pairs(subtitles) do
-        if userBottomLang == subtitle["lang"] and (options.skipIgnoredSubtitles and subtitle["title"] ~= nil and not hasValue(options.ignoredSubtitleMatch, subtitle["title"])) then
+        if userBottomLang == subtitle["lang"] and filterSubtitle(subtitle["title"]) then
         bottomSid = subtitle["id"]
         break
         end
@@ -68,7 +73,7 @@ if bottomSid > 0 then break end
 end
 for _, userTopLang in ipairs(options.preferredLanguages["top"]) do
     for _, subtitle in pairs(subtitles) do
-        if userTopLang == subtitle["lang"] and (options.skipIgnoredSubtitles and subtitle["title"] ~= nil and not hasValue(options.ignoredSubtitleMatch, subtitle["title"])) then
+        if userTopLang == subtitle["lang"] and filterSubtitle(subtitle["title"]) then
         topSid = subtitle["id"]
         break
         end
