@@ -3,7 +3,7 @@
 options = {
     preferredLanguages = {bottom = {"eng","jpn"}, top = {"tur"}},
     skipIgnoredSubtitles = true,
-    ignoredubtitleMatch = {"signs", "songs", "forced"}
+    ignoredSubtitleMatch = {"signs", "songs", "forced"}
 }
 
 --Global Variables
@@ -60,7 +60,7 @@ local bottomSid, topSid = 0, 0
 subtitleCount = #subtitles
 for _, userBottomLang in ipairs(options.preferredLanguages["bottom"]) do
     for _, subtitle in pairs(subtitles) do
-        if userBottomLang == subtitle["lang"] and (options.skipIgnoredSubtitles and subtitle["title"] ~= nil and not hasValue(options.ignoredubtitleMatch, subtitle["title"])) then
+        if userBottomLang == subtitle["lang"] and (options.skipIgnoredSubtitles and subtitle["title"] ~= nil and not hasValue(options.ignoredSubtitleMatch, subtitle["title"])) then
         bottomSid = subtitle["id"]
         break
         end
@@ -69,7 +69,7 @@ if bottomSid > 0 then break end
 end
 for _, userTopLang in ipairs(options.preferredLanguages["top"]) do
     for _, subtitle in pairs(subtitles) do
-        if userTopLang == subtitle["lang"] and (options.skipIgnoredSubtitles and subtitle["title"] ~= nil and not hasValue(options.ignoredubtitleMatch, subtitle["title"])) then
+        if userTopLang == subtitle["lang"] and (options.skipIgnoredSubtitles and subtitle["title"] ~= nil and not hasValue(options.ignoredSubtitleMatch, subtitle["title"])) then
         topSid = subtitle["id"]
         break
         end
