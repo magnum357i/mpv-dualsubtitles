@@ -9,8 +9,6 @@ options = {
 --Global Variables
 
 hided = false
-hbid = 0
-htid = 0
 subtitleCount = 0
 
 --Helpers
@@ -41,14 +39,7 @@ end
 
 function getSubtitleInfo(sid)
 local subtitles = getSubtitleList()
-local result
-for _, subtitle in pairs(subtitles) do
-    if subtitle["id"] == sid then
-    result = subtitle
-    break
-    end
-end
-return result
+return subtitles[sid]
 end
 
 function filterSubtitle(title)
@@ -138,16 +129,13 @@ end
 function hideSubtitles()
 if hided then
 hided = false
-mp.set_property_native("sid", hbid)
-mp.set_property_native("secondary-sid", htid)
+mp.set_property_native("sub-visibility", "yes")
+mp.set_property_native("secondary-sub-visibility", "yes")
 mp.osd_message("Subtitles visible")
 else
-local bottomSid, topSid = mp.get_property_number("sid", 0), mp.get_property_number("secondary-sid", 0)
 hided = true
-hbid = bottomSid
-htid = topSid
-mp.set_property_native("sid", 0)
-mp.set_property_native("secondary-sid", 0)
+mp.set_property_native("sub-visibility", "no")
+mp.set_property_native("secondary-sub-visibility", "no")
 mp.osd_message("Subtitles hidden")
 end
 end
