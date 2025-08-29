@@ -12,12 +12,11 @@ Dual subtitles plugin for mpv.
 ### Select Language
 Subtitles can be selected by default and the `preferredLanguages` setting related to this. the **bottom** represents the primary subtitle or the subtitle located at the bottom, while the **top** represents the secondary subtitle or the subtitle located at the top.
 ```
-preferredLanguages = {bottom = {"eng","jpn"}, top = {"tur"}},
+preferredLanguages = {bottom = "en,ja,jpn", top = "tr,tur"},
 ```
 
 ### Skip Ignored Subtitles
-Undesired subtitles can be set not to be selected at startup. For this, set `skipIgnoredSubtitles` to true and type your ignored words to the `ignoredubtitleMatch` setting.
+Undesired subtitles can be set not to be selected at startup. For this, type your ignored words to the `ignoredSubtitles` setting.
 ```
-skipIgnoredSubtitles = true
-ignoredSubtitleMatch = {"signs", "songs", "forced"}
+ignoredSubtitles = {"signs,songs"}
 ```
