@@ -8,7 +8,7 @@ options = {
 
 --Global Variables
 
-hided         = false
+hideMode      = 0
 subtitleCount = 0
 
 --Helpers
@@ -82,7 +82,8 @@ local subId = 0
         return tonumber(a.metadata.NUMBER_OF_BYTES) > tonumber(b.metadata.NUMBER_OF_BYTES)
     end)
     for _, subtitle in ipairs(selectedSubtitles) do
-        if not ((subtitle.hearing_impaired) or (subtitle.title and string.match(string.lower(subtitle.title), "sdh")) or (subtitle.title and string.match(string.lower(subtitle.title), "cc"))) then
+    local stitle = (subtitle.title) and string.lower(subtitle.title) or nil
+        if not ((subtitle.hearing_impaired) or (stitle and string.match(stitle, "sdh")) or (stitle and string.match(stitle, "cc"))) then
         subId = subtitle.id
         break
         end
@@ -96,15 +97,11 @@ end
 
 function setSubtitles()
 local subtitles         = getSubtitleList()
-local bottomSid, topSid = 0, 0
+local bottomSid, topSid = findSubtitle(splitString(options.preferredLanguages.bottom), subtitles), findSubtitle(splitString(options.preferredLanguages.top), subtitles)
 subtitleCount           = #subtitles
-bottomSid               = findSubtitle(splitString(options.preferredLanguages.bottom), subtitles)
-topSid                  = findSubtitle(splitString(options.preferredLanguages.top),    subtitles)
-if bottomSid > 0 then mp.set_property_native("sid", bottomSid)        end
-if topSid > 0    then mp.set_property_native("secondary-sid", topSid) end
-if bottomSid > 0 or topSid > 0 then
+if bottomSid > 0 then mp.set_property_native("sid",           bottomSid) end
+if topSid > 0    then mp.set_property_native("secondary-sid", topSid)    end
 print(string.format("bottom %s, top %s", (bottomSid > 0) and bottomSid or "not set", (topSid > 0) and topSid or "not set"))
-end
 end
 
 function switchForwardForSecondary()
@@ -159,16 +156,21 @@ end
 end
 
 function hideSubtitles()
-if hided then
-hided = false
+if hideMode == 0 then
+hideMode = hideMode + 1
 mp.set_property_native("sub-visibility", "yes")
-mp.set_property_native("secondary-sub-visibility", "yes")
-mp.osd_message("Subtitles visible")
-else
-hided = true
+mp.set_property_native("secondary-sub-visibility", "no")
+mp.osd_message("Only the bottom subtitle visible")
+elseif hideMode == 1 then
+hideMode = hideMode + 1
 mp.set_property_native("sub-visibility", "no")
 mp.set_property_native("secondary-sub-visibility", "no")
 mp.osd_message("Subtitles hidden")
+elseif hideMode == 2 then
+hideMode = 0
+mp.set_property_native("sub-visibility", "yes")
+mp.set_property_native("secondary-sub-visibility", "yes")
+mp.osd_message("Subtitles visible")
 end
 end
 
