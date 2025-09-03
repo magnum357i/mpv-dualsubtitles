@@ -19,9 +19,9 @@ preferredLanguages = {bottom = "en_gb,en,ja,jpn", top = "tr,tur"},
 ```
 
 ### Skip Ignored Subtitles
-You can prevent undesired subtitles from being selected at startup. Simply add the keywords you want to ignore in the ignoredSubtitles setting:
+You can prevent undesired subtitles from being selected at startup. Simply add the keywords you want to ignore in the ignoredWords setting:
 ```
-ignoredSubtitles = {"sign,song"}
+ignoredWords = {"sign,song"}
 ```
 
 ### Show the Top Subtitle as the Bottom Subtitle if the Bottom Subtitle Does Not Exist

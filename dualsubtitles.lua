@@ -23,7 +23,7 @@ return list
 end
 
 function detectSubtitleInfo(filename)
-local lang  = string.match(filename, ".+[%.%-%s]([a-zA-Z][a-zA-Z][a-zA-Z]?)[%.%-%s]")
+local lang  = string.match(filename, ".+[%.%-%s%[]([a-zA-Z][a-zA-Z][a-zA-Z]?)[%.%-%s%]]")
 local file  = io.open(filename, "rb")
 local bytes = 0
 if file then
@@ -55,12 +55,6 @@ for index, value in pairs(mp.get_property_native("track-list")) do
     table.insert(list, value)
     end
 end
-if externalsubtitles and #list > 1 then
-    table.sort(list, function(a, b)
-
-        return a.lang < b.lang
-    end)
-end
 return list
 end
 
@@ -88,16 +82,16 @@ end
 
 function findSubtitle(languageCodes)
 local selectedSubtitles = {}
-local firstFoundedLang  = ""
+local founded           = false
 local unwantedsubtitles = splitString(options.ignoredWords)
 for _, userLang in ipairs(languageCodes) do
     for _, subtitle in pairs(subtitles) do
-        if firstFoundedLang ~= "" and subtitle.lang ~= firstFoundedLang then break end
         if subtitle.lang and string.find(subtitle.lang, userLang) and filterSubtitle(subtitle, unwantedsubtitles) then
-        firstFoundedLang = subtitle.lang
+        founded = true
         table.insert(selectedSubtitles, subtitle)
         end
     end
+if founded then break end
 end
 if #selectedSubtitles == 1 then
 return selectedSubtitles[1].id
