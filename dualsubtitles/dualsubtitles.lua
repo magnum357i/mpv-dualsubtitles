@@ -4,7 +4,7 @@ https://github.com/magnum357i/mpv-dualsubtitles/
 
 ╔════════════════════════════════╗
 ║        MPV dualsubtitles       ║
-║              v2.1.3            ║
+║              v2.1.4            ║
 ╚════════════════════════════════╝
 
 ## Standardized Codes ##
@@ -143,7 +143,7 @@ local function hideSubtitles()
     end
 end
 
-local function updateSubtitleList(_,tracks)
+local function updateSubtitleList(_, tracks)
 
     subtitle.updateList(tracks)
 end
@@ -159,9 +159,9 @@ mp.observe_property("track-list", "native", updateSubtitleList)
 
 if options.secondaryOnHover then
 
-    local function showSecondaryOnHover(_,mouse)
+    local function showSecondaryOnHover(_, mouse)
 
-        if (mp.get_property_number("secondary-sid", 0) == 0) then return end
+        if not mp.get_property_number("secondary-sid", 0) then return end
 
         local windowHeight = mp.get_property_number("osd-height")
         local hoverArea    = (windowHeight * options.hoverHeightPercent) / 100

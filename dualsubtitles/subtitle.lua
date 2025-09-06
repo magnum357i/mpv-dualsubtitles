@@ -4,6 +4,8 @@ local utils = require "mp.utils"
 local h     = require "helpers"
 local this  = {}
 
+local IsWindows = package.config:sub(1, 1) ~= '/'
+
 local function detectSubtitleInfo(filename)
 
     local externalSubtitle = utils.file_info(filename)
@@ -17,15 +19,8 @@ local function filterSubtitle(subtitle,wordstofilter)
 
     local stitle = subtitle.title and subtitle.title:lower() or nil
 
-    if subtitle.forced or stitle and stitle:find("forced") then
-
-        return false
-    end
-
-    if stitle and h.hasValue(wordstofilter, stitle) then
-
-        return false
-    end
+    if subtitle.forced or stitle and stitle:find("forced") then return false end
+    if stitle and h.hasValue(wordstofilter, stitle)        then return false end
 
     return true
 end
@@ -82,8 +77,9 @@ end
 local function getLanguageMap(allLanguages)
 
     local handle
-    local files = {
-        config   = mp.command_native({'expand-path', os.getenv("TEMP").."/mpvdualsubtitles/cachedlanguages.json"}),
+    local tempDir = os.getenv("TEMP") or os.getenv("TMPDIR") or "/tmp"
+    local files   = {
+        config   = mp.command_native({'expand-path', tempDir.."/mpvdualsubtitles/cachedlanguages.json"}),
         language = mp.command_native({'expand-path', mp.get_script_directory().."/language-codes-3b2.csv"}),
         script   = mp.command_native({'expand-path', mp.get_script_directory().."/dualsubtitles.lua"})
     }
@@ -104,17 +100,17 @@ local function getLanguageMap(allLanguages)
         return utils.parse_json(content)
     end
 
-    local map       = {}
-    local is_filled = false
-    handle          = io.open(files.language, "r")
+    local map = {}
+    handle    = io.open(files.language, "r")
 
     if not handle then
 
-        mp.osd_message("[dualsubtitles] Language map file not found! A file named 'language-codes-3b2.csv' must be placed in the plugin directory.", 5000)
+        h.notify("Language map file not found! A file named 'language-codes-3b2.csv' must be placed in the plugin directory.", "languagefile", "warn")
     else
 
-        allLanguages   = h.splitString(allLanguages)
-        local langKeys = {}
+        local is_filled = false
+        allLanguages    = h.splitString(allLanguages)
+        local langKeys  = {}
 
         for _, lang in ipairs(allLanguages) do
 
@@ -134,28 +130,37 @@ local function getLanguageMap(allLanguages)
         end
 
         handle:close()
-    end
 
-    if is_filled then
+        if is_filled then
 
-        local tempPath      = files.config:match("(.+)[/\\]")
-        local ok, err, code = os.rename(tempPath, tempPath)
+            local tempPath      = files.config:match("(.+)[/\\]")
+            local ok, err, code = os.rename(tempPath, tempPath)
 
-        if not ok then os.execute('mkdir ' ..tempPath:gsub("/", "\\")) end
+            if not ok then
 
-        handle = io.open(files.config, "w")
+                if IsWindows then
 
-        if handle then
+                    os.execute('mkdir ' ..tempPath:gsub("/", "\\"))
+                else
 
-            handle:write(utils.format_json(map))
-            handle:close()
+                    os.execute('mkdir -p ' ..tempPath)
+                end
+            end
+
+            handle = io.open(files.config, "w")
+
+            if handle then
+
+                handle:write(utils.format_json(map))
+                handle:close()
+            else
+
+                h.notify("Failed to create the cache file. Required for performance.", "languagefile", "error")
+            end
         else
 
-            mp.osd_message("[dualsubtitles] Failed to create the cache file. Required for performance.", 5000)
+            h.notify("You entered invalid languages, or the CSV file is broken.", "languagefile", "error")
         end
-    else
-
-        mp.osd_message("[dualsubtitles] You entered invalid languages, or the CSV file is broken.", 5000)
     end
 
     return map
@@ -181,7 +186,7 @@ local function mergeLanguages(preferred, map)
                 table.insert(languages, map[langCode][2]:lower())
             elseif #map > 0 then
 
-                msg.error("Map Error: Unrecognized language code")
+                h.notify("Unrecognized language code", "languagefile", "error")
             end
         else
 
@@ -206,20 +211,16 @@ local function getSubtitleList()
             if value.external then
 
                 local lang, bytes = detectSubtitleInfo(value["external-filename"])
+                value.lang        = lang
 
-                if lang and bytes > 0 then
-
-                    value.lang = lang
+                if bytes > 0 then
 
                     if not value.metadata then value.metadata = {} end
 
                     value.metadata.NUMBER_OF_BYTES = bytes
-                else
-
-                    value.lang = nil
-
-                    msg.error("Failed to get external subtitle info")
                 end
+
+                if not lang then h.notify("External subtitle has no language code. To fix this, add a language tag to the filename (e.g., subtitle.en.srt).", "externalsubtitle", "error") end
             end
 
             table.insert(list, value)
@@ -255,13 +256,12 @@ end
 function this.load()
 
     local langMap  = getLanguageMap(this.options.preferredLanguages.bottom..","..this.options.preferredLanguages.top)
-
     this.bottomSid = getSidByLanguage(mergeLanguages(this.options.preferredLanguages.bottom, langMap))
     this.topSid    = getSidByLanguage(mergeLanguages(this.options.preferredLanguages.top,    langMap))
 
     if this.bottomSid > 0 and this.bottomSid == this.topSid then
 
-        mp.osd_message("[dualsubtitles] The IDs of the top and bottom subtitles are the same.", 5000)
+        h.notify("The IDs of the top and bottom subtitles are the same.", "sameinput", "warn")
     end
 end
 
@@ -288,7 +288,7 @@ function this.format(mode)
         dst = dst..string.format("%s ", track.lang)
     end
 
-    local codec = track.codec and track.codec or "<unknown>"
+    local codec = track.codec or "<unknown>"
     codec       = (codec == "subrip") and "subrip [Advanced Sub Station Alpha]" or codec
 
     dst = dst..codec
@@ -335,7 +335,7 @@ end
 
 function this.loadDefaults()
 
-    this.bottomSid = mp.get_property_number("sid", 0)
+    this.bottomSid = mp.get_property_number("sid",           0)
     this.topSid    = mp.get_property_number("secondary-sid", 0)
 end
 
