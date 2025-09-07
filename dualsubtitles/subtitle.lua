@@ -29,7 +29,9 @@ local function getSidByLanguage(languageCodes)
 
     local selectedSubtitles = {}
     local founded           = false
-    local unwantedsubtitles = h.splitString(this.options.ignoredWords)
+    local unwantedsubtitles = h.splitString(this.config.ignored_words)
+
+    h.log(unwantedsubtitles)
 
     for _, userLang in ipairs(languageCodes) do
 
@@ -232,11 +234,11 @@ local function getSubtitleList()
     return list
 end
 
-function this.init(options)
+function this.init(config)
 
     this.subtitles      = {}
     this.prevTrackCount = 0
-    this.options        = options
+    this.config         = config
     this.bottomSid      = 0
     this.topSid         = 0
 end
@@ -255,9 +257,9 @@ end
 
 function this.load()
 
-    local langMap  = getLanguageMap(this.options.preferredLanguages.bottom..","..this.options.preferredLanguages.top)
-    this.bottomSid = getSidByLanguage(mergeLanguages(this.options.preferredLanguages.bottom, langMap))
-    this.topSid    = getSidByLanguage(mergeLanguages(this.options.preferredLanguages.top,    langMap))
+    local langMap  = getLanguageMap(this.config.bottom_languages..","..this.config.top_languages)
+    this.bottomSid = getSidByLanguage(mergeLanguages(this.config.bottom_languages, langMap))
+    this.topSid    = getSidByLanguage(mergeLanguages(this.config.top_languages,    langMap))
 
     if this.bottomSid > 0 and this.bottomSid == this.topSid then
 

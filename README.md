@@ -4,31 +4,47 @@ Dual subtitles plugin for mpv.
 ![Example for Dual Subtitles](https://github.com/magnum357i/mpv-dualsubtitles/blob/main/mpv-shot0004.jpg)
 
 # Key Bindings
-- `k/K`: Cycle through the available subtitles for the top subtitle track. Use k to go forward and K (Shift + k) to go backward.
-- `u`: Reverse subtitles. The top subtitle becomes the bottom subtitle, and the bottom subtitle becomes the top subtitle.
-- `v`: Cycle through subtitle visibility modes. The modes are: (1) only bottom subtitle visible, (2) both subtitles hidden, and (3) both subtitles visible.
+| shortcut            | description                               |
+| ------------------- | ----------------------------------------- |
+| <kbd>k</kbd>        | switch secondary subtitle track           |
+| <kbd>K</kbd>        | switch secondary subtitle track backwards |
+| <kbd>u</kbd>        | reverse subtitles                         |
+| <kbd>v</kbd>        | cycle through subtitle visibility modes   |
+| <kbd>Ctrl+e</kbd>   | move secondary subtitle down              |
+| <kbd>Ctrl+E</kbd>   | move secondary subtitle up                |
 
 # Configuration
-### Select Language
-You can set the default subtitles using the preferredLanguages setting.
-- **bottom**: primary subtitle (displayed at the bottom)
-- **top**: secondary subtitle (displayed at the top)
 
-```
-preferredLanguages = {bottom = "en_gb,en,ja,jpn", top = "tr,tur"},
-```
+Create a file named `dualsubtitles.conf` in the script-opts directory and copy the content below into it. You can now modify the settings as desired.
 
-### Skip Ignored Subtitles
-You can prevent undesired subtitles from being selected at startup. Simply add the keywords you want to ignore in the ignoredWords setting:
-```
-ignoredWords = {"sign,song"}
-```
+```ini
+# Bottom subtitle selection at startup (external subs included)
+bottom_languages=en-us,ja-jp
 
-### Show the Top Subtitle as the Bottom Subtitle if the Bottom Subtitle Does Not Exist
-Set the useTopAsBottom setting to true to enable this behavior:
-```
-useTopAsBottom = true
+# Top subtitle selection at startup (external subs included)
+top_languages=tr-tr
+
+# Exclude subtitles with these words in their title (does not work for external subs)
+ignored_words=sign,song
+
+# Show top subtitle as bottom subtitle if bottom subtitle is missing
+use_top_as_bottom=yes
+
+# Display secondary subtitle while hovering
+secondary_on_hover=no
+
+# Secondary subtitle hover area (50 = the top half of the screen)
+hover_height_percent=50
 ```
 
 ### External Subtitles
-If an external subtitle is added through one of mpv’s auto-loading methods like sub-auto=fuzzy and sub-auto=auto, it can be automatically selected according to the preferredLanguages setting. Make sure the subtitle filename ends with a language code (e.g., en, eng).
+External subtitles loaded at startup can be automatically selected based on your preferred languages. Make sure the subtitle filename ends with a language code.
+
+| Accepted Filename Formats |
+|-----------------|
+| `movie.en.srt`  |
+| `movie-en.srt`  |
+| `movie en.srt`  |
+| `movie.eng.srt` |
+| `movie-eng.srt` |
+| `movie eng.srt` |
