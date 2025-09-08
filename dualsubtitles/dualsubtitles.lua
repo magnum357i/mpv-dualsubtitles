@@ -4,7 +4,7 @@ https://github.com/magnum357i/mpv-dualsubtitles/
 
 ╔════════════════════════════════╗
 ║        MPV dualsubtitles       ║
-║              v2.1.5            ║
+║              v2.1.6            ║
 ╚════════════════════════════════╝
 
 ## Standardized Codes ##

@@ -19,7 +19,7 @@ function this.notify(msg,errType,level)
 
     mp.msg[level](msg)
 
-    mp.osd_message(assStart..string.format("{\\c%s\\b1}[dualsubtitles:%s]{\\b0} %s! %s", (level == "error") and "&H3300AA&" or "&H0077CC&", errType, (level == "error") and "Error" or "Warning", msg)..assStop, 5000)
+    mp.osd_message(assStart..string.format("{\\c%s\\b1}[dualsubtitles:%s]{\\b0} %s! %s", (level == "error") and "&H3300AA&" or "&H0077CC&", errType, (level == "error") and "Error" or "Warning", msg)..assStop, 5)
 end
 
 function this.splitString(str)

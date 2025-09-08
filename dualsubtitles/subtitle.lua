@@ -29,23 +29,26 @@ local function getSidByLanguage(languageCodes)
 
     local selectedSubtitles = {}
     local founded           = false
-    local unwantedsubtitles = h.splitString(this.config.ignored_words)
-
-    h.log(unwantedsubtitles)
+    local unwantedSubtitles = h.splitString(this.config.ignored_words)
+    local missingMetadata   = false
 
     for _, userLang in ipairs(languageCodes) do
 
         for _, subtitle in ipairs(this.subtitles) do
 
-            if subtitle.lang and subtitle.lang:lower() == userLang and filterSubtitle(subtitle, unwantedsubtitles) then
+            if subtitle.lang and subtitle.lang:lower() == userLang and filterSubtitle(subtitle, unwantedSubtitles) then
 
                 founded = true
                 table.insert(selectedSubtitles, subtitle)
+
+                if not subtitle.metadata and not missingMetadata then missingMetadata = true end
             end
         end
 
         if founded then break end
     end
+
+    if #selectedSubtitles > 1 and missingMetadata then h.notify("There are subtitles with missing metadata.", "findsubtitle", "warn") end
 
     local subId = 0
 
@@ -56,7 +59,7 @@ local function getSidByLanguage(languageCodes)
 
         table.sort(selectedSubtitles, function(a, b)
 
-            return tonumber(a.metadata.NUMBER_OF_BYTES) > tonumber(b.metadata.NUMBER_OF_BYTES)
+            return a.metadata and b.metadata and tonumber(a.metadata.NUMBER_OF_BYTES) > tonumber(b.metadata.NUMBER_OF_BYTES)
         end)
 
         for _, subtitle in ipairs(selectedSubtitles) do
@@ -81,17 +84,19 @@ local function getLanguageMap(allLanguages)
     local handle
     local tempDir = os.getenv("TEMP") or os.getenv("TMPDIR") or "/tmp"
     local files   = {
-        config   = mp.command_native({'expand-path', tempDir.."/mpvdualsubtitles/cachedlanguages.json"}),
+        cache    = mp.command_native({'expand-path', tempDir.."/mpvdualsubtitles/cachedlanguages.json"}),
         language = mp.command_native({'expand-path', mp.get_script_directory().."/language-codes-3b2.csv"}),
-        script   = mp.command_native({'expand-path', mp.get_script_directory().."/dualsubtitles.lua"})
+        script   = mp.command_native({'expand-path', mp.get_script_directory().."/dualsubtitles.lua"}),
+        config   = mp.command_native({"expand-path", "~~/script-opts/dualsubtitles.conf"})
     }
 
-    local scriptFileInfo = utils.file_info(files.script)
     local configFileInfo = utils.file_info(files.config)
+    local cacheFileInfo  = utils.file_info(files.cache)
 
-    if scriptFileInfo and configFileInfo and tonumber(scriptFileInfo.mtime) > tonumber(configFileInfo.mtime) then os.remove(files.config) end
+    if not configFileInfo then configFileInfo = utils.file_info(files.script) end
+    if configFileInfo and cacheFileInfo and tonumber(configFileInfo.mtime) > tonumber(cacheFileInfo.mtime) then os.remove(files.cache) end
 
-    handle = io.open(files.config, "r")
+    handle = io.open(files.cache, "r")
 
     if handle then
 
@@ -107,12 +112,12 @@ local function getLanguageMap(allLanguages)
 
     if not handle then
 
-        h.notify("Language map file not found! A file named 'language-codes-3b2.csv' must be placed in the plugin directory.", "languagefile", "warn")
+        h.notify("Language map file not found! A file named 'language-codes-3b2.csv' must be placed in the plugin directory.", "languagecache", "warn")
     else
 
-        local is_filled = false
-        allLanguages    = h.splitString(allLanguages)
-        local langKeys  = {}
+        local isFilled = false
+        allLanguages   = h.splitString(allLanguages)
+        local langKeys = {}
 
         for _, lang in ipairs(allLanguages) do
 
@@ -127,15 +132,15 @@ local function getLanguageMap(allLanguages)
 
                 map[iso2] = {iso3, title}
 
-                if not is_filled then is_filled = true end
+                if not isFilled then isFilled = true end
             end
         end
 
         handle:close()
 
-        if is_filled then
+        if isFilled then
 
-            local tempPath      = files.config:match("(.+)[/\\]")
+            local tempPath      = files.cache:match("(.+)[/\\]")
             local ok, err, code = os.rename(tempPath, tempPath)
 
             if not ok then
@@ -149,7 +154,7 @@ local function getLanguageMap(allLanguages)
                 end
             end
 
-            handle = io.open(files.config, "w")
+            handle = io.open(files.cache, "w")
 
             if handle then
 
@@ -157,11 +162,11 @@ local function getLanguageMap(allLanguages)
                 handle:close()
             else
 
-                h.notify("Failed to create the cache file. Required for performance.", "languagefile", "error")
+                h.notify("Failed to create the cache file. Required for performance.", "languagecache", "error")
             end
         else
 
-            h.notify("You entered invalid languages, or the CSV file is broken.", "languagefile", "error")
+            h.notify("You entered invalid languages, or the CSV file is broken.", "languagecache", "error")
         end
     end
 
@@ -188,7 +193,7 @@ local function mergeLanguages(preferred, map)
                 table.insert(languages, map[langCode][2]:lower())
             elseif #map > 0 then
 
-                h.notify("Unrecognized language code", "languagefile", "error")
+                h.notify(string.format("Unrecognized language code: %s", value), "languagecache", "warn")
             end
         else
 
