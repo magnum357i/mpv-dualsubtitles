@@ -13,9 +13,17 @@ Dual subtitles plugin for mpv.
 | <kbd>Ctrl+e</kbd>   | move secondary subtitle down              |
 | <kbd>Ctrl+E</kbd>   | move secondary subtitle up                |
 
-# Configuration
+# How Does the Auto Selection Work?
+- Find subtitles based on the preferred languages.
+- Skip forced and ignored subtitles.
+- Sort subtitles by size.
+- Skip hearing-impaired subtitles.
+- Select the first subtitle. If none, use a hearing-impaired subtitle.
 
-Create a file named `dualsubtitles.conf` in the script-opts directory and copy the content below into it. You can now modify the settings as desired.
+Forced subtitles are never selected when full subtitles are available, even if they are not properly marked. And hearing-impaired subtitles are better than no subtitle.
+
+# Configuration
+Create a file named `dualsubtitles.conf` in the script-opts directory, and copy the content below into it. You can now modify the settings as desired.
 
 ```ini
 # Bottom subtitle selection at startup (external subs included)
@@ -24,13 +32,13 @@ bottom_languages=en-us,ja-jp
 # Top subtitle selection at startup (external subs included)
 top_languages=tr-tr
 
-# Exclude subtitles with these words in their title (does not work for external subs)
+# Exclude subtitles with these words in their title (does not work for external subs because their title is broken)
 ignored_words=sign,song
 
-# Show top subtitle as bottom subtitle if bottom subtitle is missing
+# Set top subtitle as bottom subtitle if bottom subtitle is missing
 use_top_as_bottom=yes
 
-# Display secondary subtitle while hovering
+# Show secondary subtitle while hovering
 secondary_on_hover=no
 
 # Secondary subtitle hover area (50 = the top half of the screen)
