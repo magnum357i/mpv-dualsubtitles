@@ -7,6 +7,9 @@ https://github.com/magnum357i/mpv-dualsubtitles/
 ║              v2.2.0            ║
 ╚════════════════════════════════╝
 
+## Required ##
+FFmpeg (for subtitle merging)
+
 ## Standardized Codes ##
 Languages (ISO 639): https://en.wikipedia.org/wiki/List_of_ISO_639_language_codes
 Countries (ISO 3166): https://en.wikipedia.org/wiki/List_of_ISO_3166_country_codes
