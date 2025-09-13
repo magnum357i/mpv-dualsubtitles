@@ -1,7 +1,7 @@
 # mpv-dualsubtitles
 Dual subtitles plugin for mpv.
 
-![Example for Dual Subtitles](https://github.com/magnum357i/mpv-dualsubtitles/blob/main/mpv-shot0004.jpg)
+![Example for Dual Subtitles](https://github.com/magnum357i/mpv-dualsubtitles/blob/main/mpv-shot0001.jpg)
 
 # Key Bindings
 | shortcut            | description                               |
@@ -58,7 +58,7 @@ top_style=fn:Arial,fs:70,1c:&H0000DEFF,2c:&H000000FF,3c:&H00000000,4c:&H00000000
 keep_ts=none
 ```
 
-### External Subtitles
+# External Subtitles
 External subtitles loaded at startup can be automatically selected based on your preferred languages. Make sure the subtitle filename ends with a language code.
 
 | Accepted Filename Formats |
@@ -69,3 +69,8 @@ External subtitles loaded at startup can be automatically selected based on your
 | `movie.eng.srt` |
 | `movie-eng.srt` |
 | `movie eng.srt` |
+
+# Merging Subtitles
+Merging subtitles allows you to have more styling options.
+
+![Example for Merging Subtitles](https://github.com/magnum357i/mpv-dualsubtitles/blob/main/mpv-shot0002.jpg)
