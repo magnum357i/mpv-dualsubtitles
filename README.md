@@ -12,8 +12,10 @@ Dual subtitles plugin for mpv.
 | <kbd>v</kbd>        | cycle through subtitle visibility modes   |
 | <kbd>Ctrl+e</kbd>   | move secondary subtitle down              |
 | <kbd>Ctrl+E</kbd>   | move secondary subtitle up                |
+| <kbd>Ctrl+b</kbd>   | merge subtitles into a single file        |
+| <kbd>Ctrl+B</kbd>   | delete the merged file                    |
 
-# How Does the Auto Selection Work?
+# How Does Auto Selection Work?
 - Find subtitles based on the preferred languages.
 - Skip forced and ignored subtitles.
 - Sort subtitles by size.
@@ -43,6 +45,17 @@ secondary_on_hover=no
 
 # Secondary subtitle hover area (50 = the top half of the screen)
 hover_height_percent=50
+
+# Style settings for the merged subtitle
+# In mpv, styling options for the secondary subtitle are very limited.
+# By merging the subtitles, you can work around this limitation. If your video file is on an HDD, this process may take 2–3 minutes.
+bottom_style=fn:Arial,fs:70,1c:&H00FFFFFF,2c:&H000000FF,3c:&H00000000,4c:&H00000000,b:0,i:0,u:0,s:0,sx:100,sy:100,fsp:0,frz:0,bs:1,bord:3,shad:0,an:2,ml:0,mr:0,mv:40,enc:1
+top_style=fn:Arial,fs:70,1c:&H0000DEFF,2c:&H000000FF,3c:&H00000000,4c:&H00000000,b:0,i:0,u:0,s:0,sx:100,sy:100,fsp:0,frz:0,bs:1,bord:3,shad:0,an:8,ml:0,mr:0,mv:40,enc:1
+
+# Don’t strip sign lines
+# If the ASS file contains sign lines (lines with a pos tag) and you don’t want them to be stripped, you can use this option.
+# Valid options: bottom, top, and none
+keep_ts=none
 ```
 
 ### External Subtitles

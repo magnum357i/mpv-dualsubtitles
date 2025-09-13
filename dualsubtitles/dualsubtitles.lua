@@ -1,168 +1,680 @@
---[[
-
-https://github.com/magnum357i/mpv-dualsubtitles/
-
-╔════════════════════════════════╗
-║        MPV dualsubtitles       ║
-║              v2.1.6            ║
-╚════════════════════════════════╝
-
-## Standardized Codes ##
-Languages (ISO 639): https://en.wikipedia.org/wiki/List_of_ISO_639_language_codes
-Countries (ISO 3166): https://en.wikipedia.org/wiki/List_of_ISO_3166_country_codes
-
-## Language Reference ##
-CSV Data: https://github.com/datasets/language-codes/blob/main/data/language-codes-3b2.csv
-]]
-
 local mp       = require "mp"
-local options  = require "mp.options"
+local msg      = require "mp.msg"
+local utils    = require "mp.utils"
 local h        = require "helpers"
 local subtitle = require "subtitle"
+local this     = {
 
-local config = {
-    bottom_languages     = "en-us,ja-jp",
-    top_languages        = "tr-tr",
-    ignored_words        = "sign,song",
-    use_top_as_bottom    = true,
-    secondary_on_hover   = false,
-    hover_height_percent = 50
+    isWindows      = package.config:sub(1, 1) ~= '/',
+    seperator      = isWindows and "//" or "\\",
+    subtitles      = {},
+    prevTrackCount = 0,
+    config         = {},
+    bottom         = nil,
+    top            = nil,
+    merged         = nil,
+    cacheDir       = "mpvdualsubtitles",
+    hash           = nil,
+    paths          = {
+
+        temp   = os.getenv("TEMP") or os.getenv("TMPDIR") or "/tmp",
+        script = "~~/scripts/dualsubtitles",
+        config = "~~/script-opts"
+    },
+    files          = {
+
+        bottom   = "primary",
+        top      = "secondary",
+        merged   = "merged",
+        language = "cachedlanguages"
+    }
 }
 
-options.read_options(config, "dualsubtitles")
+local function filterSubtitle(subtitle,wordstofilter)
 
-local hideMode = 0
+    local stitle = subtitle.title and subtitle.title:lower() or nil
 
-subtitle.init(config)
+    if subtitle.forced                              then return false end
+    if stitle and h.hasValue(wordstofilter, stitle) then return false end
 
-local function setSubtitles()
-
-    subtitle.load()
-
-    if config.use_top_as_bottom and subtitle.bottomSid == 0 and subtitle.topSid > 0 then
-
-        subtitle.bottomSid = subtitle.topSid
-        subtitle.topSid    = 0
-    end
-
-    if config.secondary_on_hover and subtitle.bottomSid > 0 and subtitle.topSid > 0 then
-
-        subtitle.toggle(1,0)
-    end
-
-    subtitle.set()
-
-    h.log(string.format("bottom %s, top %s", (subtitle.bottomSid > 0) and subtitle.bottomSid or "not set", (subtitle.topSid > 0) and subtitle.topSid or "not set"))
+    return true
 end
 
-local function reverseSubtitles()
+local function stripLine(text)
 
-    subtitle.loadDefaults()
+    if text:match("%}%s*m%s+%d+%s+%d+") then return "" end
 
-    if subtitle.bottomSid > 0 and subtitle.topSid > 0 then
-
-        local tempBottomSid = subtitle.bottomSid
-        local tempTopSid    = subtitle.topSid
-
-        subtitle.bottomSid  = 0
-        subtitle.topSid     = 0
-
-        subtitle.set()
-
-        subtitle.bottomSid  = tempTopSid
-        subtitle.topSid     = tempBottomSid
-
-        subtitle.set()
-
-        mp.osd_message(string.format("Top: %s\nBottom: %s", subtitle.format(2), subtitle.format(1)))
-    else
-
-        mp.osd_message("Subtitles not reversed")
-    end
+    return text:gsub("%{[^%}]*%}", "")
 end
 
-local function hideSubtitles()
+local function isSign(text)
 
-    if hideMode == 0 then
-
-        hideMode = hideMode + 1
-
-        subtitle.toggle(1,0)
-
-        mp.osd_message("Only the bottom subtitle visible")
-    elseif hideMode == 1 then
-
-        hideMode = hideMode + 1
-
-        subtitle.toggle(0,0)
-
-        mp.osd_message("Subtitles hidden")
-    elseif hideMode == 2 then
-
-        hideMode = 0
-
-        subtitle.toggle(1,1)
-
-        mp.osd_message("Subtitles visible")
-    end
+    return text:find("\\pos%([%d%s%.,]+%)") or text:find("\\move%([%d%s%.,]+%)")
 end
 
-local function updateSubtitleList(_, tracks)
+local function getSubtitleList()
 
-    subtitle.updateList(tracks)
-end
+    local list   = {}
+    local tracks = mp.get_property_native('track-list')
 
-local function cycleSecondary(mode)
+    for index, value in ipairs(tracks) do
 
-    if mode == 1 then
+        if value.type == "sub" then
 
-        mp.command("cycle secondary-sid")
-    else
-
-        mp.command("cycle secondary-sid down")
-    end
-end
-
-local function cycleSecondaryPosition(mode)
-
-    if mode == 1 then
-
-        mp.command("add secondary-sub-pos +1")
-    else
-
-        mp.command("add secondary-sub-pos -1")
-    end
-end
-
-mp.register_event("file-loaded", setSubtitles)
-
-mp.add_key_binding("k",      "secondaryforward",          function() cycleSecondary(1) end)
-mp.add_key_binding("K",      "secondarybackward",         function() cycleSecondary(2) end)
-mp.add_key_binding("ctrl+r", "increasesecondaryposition", function() cycleSecondaryPosition(1) end, {repeatable = true})
-mp.add_key_binding("ctrl+R", "decreasesecondaryposition", function() cycleSecondaryPosition(2) end, {repeatable = true})
-
-mp.add_key_binding("v", "hidesubtitles",    hideSubtitles)
-mp.add_key_binding("u", "reversesubtitles", reverseSubtitles)
-
-mp.observe_property("track-list", "native", updateSubtitleList)
-
-if config.secondary_on_hover then
-
-    local function showSecondaryOnHover(_, mouse)
-
-        if not mp.get_property_number("secondary-sid", 0) then return end
-
-        local windowHeight = mp.get_property_number("osd-height")
-        local hoverArea    = (windowHeight * config.hover_height_percent) / 100
-
-        if mouse.y >= 0 and mouse.y <= hoverArea then
-
-            subtitle.toggle(1,1)
-        else
-
-            subtitle.toggle(1,0)
+            table.insert(list, subtitle:new(value))
         end
     end
 
-    mp.observe_property("mouse-pos", "native", showSecondaryOnHover)
+    this.prevTrackCount = #tracks
+
+    return list
 end
+
+local function checkPath(path)
+
+    local ok = os.rename(path, path)
+
+    return ok
+end
+
+local function removePath(path)
+
+    local info = utils.file_info(path)
+
+    if not info then return false end
+
+    if info.is_file then
+
+        os.remove(path)
+    else
+
+        if this.isWindows then
+
+            os.execute(string.format("rmdir /s /q \"%s\"", path))
+        else
+
+            os.execute(string.format("rmdir -rf \"%s\"", path))
+        end
+    end
+
+    return true
+end
+
+local function getSidByLanguage(languageCodes)
+
+    local selectedSubtitles = {}
+    local founded           = false
+    local unwantedSubtitles = h.splitString(this.config.ignored_words)
+    local missingMetadata   = false
+
+    for _, userLang in ipairs(languageCodes) do
+
+        for _, subtitle in ipairs(this.subtitles) do
+
+            if subtitle.lang and subtitle.lang:lower() == userLang and filterSubtitle(subtitle, unwantedSubtitles) then
+
+                founded = true
+                table.insert(selectedSubtitles, subtitle)
+
+                if not subtitle.size == 0 and not missingMetadata then missingMetadata = true end
+            end
+        end
+
+        if founded then break end
+    end
+
+    if #selectedSubtitles > 1 and missingMetadata then h.notify("There are subtitles with missing metadata.", "findsubtitle", "warn") end
+
+    local subId = 0
+
+    if #selectedSubtitles == 1 then
+
+        subId = selectedSubtitles[1].id
+    elseif #selectedSubtitles > 1 then
+
+        table.sort(selectedSubtitles, function(a, b)
+
+            return tonumber(a.size) > tonumber(b.size)
+        end)
+
+        for _, subtitle in ipairs(selectedSubtitles) do
+
+            local stitle = subtitle.title and subtitle.title:lower() or nil
+
+            if not subtitle.hearingimpaired then
+
+                subId = subtitle.id
+                break
+            end
+        end
+
+        subId = (subId == 0) and selectedSubtitles[1].id or subId
+    end
+
+    return subId
+end
+
+local function getLanguageMap(allLanguages)
+
+    local handle
+    local configFileInfo = utils.file_info(this.getPath("configfile"))
+    local cacheFileInfo  = utils.file_info(this.getPath("cachelanguagefile"))
+
+    if not configFileInfo then configFileInfo = utils.file_info(this.getPath("scriptfile")) end
+    if configFileInfo and cacheFileInfo and tonumber(configFileInfo.mtime) > tonumber(cacheFileInfo.mtime) then os.remove(this.getPath("cachelanguagefile")) end
+
+    handle = io.open(this.getPath("cachelanguagefile"), "r")
+
+    if handle then
+
+        local content = handle:read("*a")
+
+        handle:close()
+
+        return utils.parse_json(content)
+    end
+
+    local map = {}
+    handle    = io.open(this.getPath("csvfile"), "r")
+
+    if not handle then
+
+        h.notify("Language map file not found! A file named 'language-codes-3b2.csv' must be placed in the plugin directory.", "languagecache", "warn")
+    else
+
+        local isFilled = false
+        allLanguages   = h.splitString(allLanguages)
+        local langKeys = {}
+
+        for _, lang in ipairs(allLanguages) do
+
+            table.insert(langKeys, lang:find("%-") and lang:gsub("%-.+","") or lang)
+        end
+
+        for line in handle:lines() do
+
+            local iso3, iso2, title = line:gsub('"', ''):gsub('[;,]?%s.+', ''):match("([^,]+),([^,]+),([^,]+)")
+
+            if title and h.hasValue(langKeys, iso2) then
+
+                map[iso2] = {iso3, title}
+
+                if not isFilled then isFilled = true end
+            end
+        end
+
+        handle:close()
+
+        if isFilled then
+
+            local tempPath = this.getPath("cachepath")
+
+            if not checkPath(tempPath) then
+
+                if this.isWindows then
+
+                    os.execute(string.format("mkdir \"%s\"", tempPath))
+                else
+
+                    os.execute(string.format("mkdir -p \"%s\"", tempPath))
+                end
+            end
+
+            handle = io.open(this.getPath("cachelanguagefile"), "w")
+
+            if handle then
+
+                handle:write(utils.format_json(map))
+                handle:close()
+            else
+
+                h.notify("Failed to create the cache file. Required for performance.", "languagecache", "error")
+            end
+        else
+
+            h.notify("You entered invalid languages, or the CSV file is broken.", "languagecache", "error")
+        end
+    end
+
+    return map
+end
+
+local function mergeLanguages(preferred, map)
+
+    local languages = {}
+    preferred       = h.splitString(preferred:gsub("_","-"))
+
+    for _, value in ipairs(preferred) do
+
+        local langCode, langCountry = value:lower():match("([^%-][^%-])%-([^%-][^%-])")
+
+        if langCode and langCountry then
+
+            table.insert(languages, value)
+            table.insert(languages, langCode)
+
+            if map and map[langCode] then
+
+                table.insert(languages, map[langCode][1]:lower())
+                table.insert(languages, map[langCode][2]:lower())
+            elseif #map > 0 then
+
+                h.notify(string.format("Unrecognized language code: %s", value), "languagecache", "warn")
+            end
+        else
+
+            table.insert(languages, value)
+        end
+    end
+
+    h.log(languages)
+
+    return languages
+end
+
+local function copySubtitleToTemp(subtitle, key)
+
+    if not (subtitle.ext == ".srt" or subtitle.ext == ".ass") then return false end
+
+    local sourceFile = subtitle.path
+    local targetFile = this.getPath("cache"..key.."file")
+
+    if subtitle.ext == ".ass" then
+
+        os.execute(string.format("copy \"%s\" \"%s\"", sourceFile, targetFile))
+    else
+
+        os.execute(string.format("ffmpeg -i \"%s\" -c:s ass \"%s\"", sourceFile, targetFile))
+    end
+
+    return checkPath(targetFile)
+end
+
+local function mergeSubtitles()
+
+    local data = {
+
+        {path = this.getPath("cachebottomfile"), style = "Primary",   subType = "bottom"},
+        {path = this.getPath("cachetopfile"),    style = "Secondary", subType = "top"}
+    }
+
+    local file
+    local styles = {}
+    local lines  = {}
+    local scount = 0
+
+    for _, v in ipairs(data) do
+
+        file = io.open(v.path, "r")
+
+        if file then
+
+            local content = file:read("*all")
+
+            file:close()
+
+            if this.config.keep_ts == v.subType then
+
+                for style in content:gmatch("Style:[^\n]+") do
+
+                local preStyleName, styleName, postStyleName = style:match("(Style:%s+)([^,]+)([^\n]+)")
+
+                    if styleName then
+
+                        styleName = v.style..styleName
+
+                        table.insert(styles, preStyleName..styleName..postStyleName)
+                    end
+                end
+            end
+
+            for line in content:gmatch("Dialogue:[^\n]+") do
+
+                local preStyle, style, postStyle, text = line:match("^(Dialogue:[^,]*,[^,]*,[^,]*,)([^,]+)(,[^,]*,[^,]*,[^,]*,[^,]*,[^,]*,)(.+)$")
+
+                if text then
+
+                    if not (this.config.keep_ts == v.subType and isSign(text)) then
+
+                        text  = stripLine(text)
+                        style = v.style
+                    else
+
+                        style = v.style..style
+                    end
+
+                    if text ~= "" then table.insert(lines, preStyle..style..postStyle..text) end
+                end
+            end
+
+            if #lines > 0 then scount = scount + 1 end
+
+            removePath(v.path)
+        end
+    end
+
+    if scount ~= 2 then
+
+        h.notify("There is a missing or corrupted subtitle.", "mergesubtitles", "error")
+
+        return false
+    end
+
+    local header = [[
+[Script Info]
+Title: New subtitles
+ScriptType: v4.00+
+WrapStyle: 0
+PlayResX: 1920
+PlayResY: 1080
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Primary,<style1>
+Style: Secondary,<style2>
+<extrastyles>
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+
+]]
+
+    header = header:gsub("<style1>", this.config.bottom_style:gsub("[^,]*:", ""))
+    header = header:gsub("<style2>", this.config.top_style:gsub("[^,]*:", ""))
+
+    if #styles > 0 then
+
+        header = header:gsub("<extrastyles>", table.concat(styles, "\n"))
+    else
+
+        header = header:gsub("\n<extrastyles>", "")
+    end
+
+    file = io.open(this.getPath("cachemergedfile"), "w")
+
+    file:write(header)
+
+    for _, line in ipairs(lines) do file:write(line.."\n") end
+
+    file:close()
+
+    return true
+end
+
+function this.deleteMerged()
+
+    if not this.merged then return false end
+
+    mp.commandv("sub-remove", this.merged.id)
+
+    removePath(this.getPath("cachepathmerge"))
+
+    this.merged = nil
+
+    return true
+end
+
+local mergeStart
+
+local function tryMerge()
+
+    local ok = mergeSubtitles()
+
+    if ok then
+
+        this.set(0, 0)
+        this.display()
+
+        mp.commandv("sub-add", this.getPath("cachemergedfile"))
+
+        local loaded  = mp.get_property_native("current-tracks/sub")
+        this.merged   = subtitle:new(loaded)
+        local elapsed = mp.get_time() - mergeStart
+
+        h.notify(string.format("Subtitles is merged. Took %d seconds.", elapsed), "mergesubtitles", "info")
+    end
+end
+
+function this.merge()
+
+    if not (this.bottom and this.top) then
+
+        h.notify("Two subtitles are required to merge.", "mergesubtitles", "error")
+
+        return false
+    end
+
+    if not this.bottom.textbased or not this.top.textbased then
+
+        h.notify("One of the selected subtitles is not text-based.", "mergesubtitles", "error")
+
+        return false
+    end
+
+    h.notify("Please wait...", "mergesubtitles", "info", 9999)
+
+    mergeStart     = mp.get_time()
+    local tempPath = this.getPath("cachepathmerge")
+
+    if not checkPath(tempPath) then
+
+        if this.isWindows then
+
+            os.execute(string.format("mkdir \"%s\"", tempPath))
+        else
+
+            os.execute(string.format("mkdir -p \"%s\"", tempPath))
+        end
+    end
+
+    local remainingSubtitles = 2
+    local copyError          = false
+
+    for _, value in ipairs({"bottom", "top"}) do
+
+        if this[value].external then
+
+            if copySubtitleToTemp(this[value], value) then
+
+                remainingSubtitles = remainingSubtitles - 1
+            else
+
+                copyError = true
+            end
+        end
+    end
+
+    if copyError then
+
+        h.notify("Subtitles could not be copied.", "mergesubtitles", "error")
+
+        return false
+    end
+
+    if remainingSubtitles == 0 then
+
+        tryMerge()
+
+        return true
+    end
+
+    local args = {}
+
+    table.insert(args, "ffmpeg")
+    table.insert(args, "-i")
+    table.insert(args, this.getPath("videofile"))
+
+    if this.bottom and not this.bottom.external then
+
+        table.insert(args, "-map")
+        table.insert(args, string.format("0:s:%s", this.bottom.id - 1))
+        table.insert(args, "-c:s")
+        table.insert(args, "ass")
+        table.insert(args, this.getPath("cachebottomfile"))
+    end
+
+    if this.top and not this.top.external then
+
+        table.insert(args, "-map")
+        table.insert(args, string.format("0:s:%s", this.top.id - 1))
+        table.insert(args, "-c:s")
+        table.insert(args, "ass")
+        table.insert(args, this.getPath("cachetopfile"))
+    end
+
+    table.insert(args, "-vn")
+    table.insert(args, "-an")
+    table.insert(args, "-dn")
+    table.insert(args, "-y")
+
+    local ffmpegCommand = {
+
+        name           = "subprocess",
+        capture_stdout = true,
+        capture_stderr = true,
+        playback_only  = false,
+        args           = args
+    }
+
+    local onSubtitleFail = function (result)
+
+        if string.match(result, "No such file or directory") then
+
+            h.notify("No such file or directory.", "mergesubtitles", "error")
+        elseif string.match(result, "Failed to set value") then
+
+            h.notify("Wrong subtitle id.", "mergesubtitles", "error")
+        else
+
+            h.log(result)
+            h.notify("See the console for details.", "mergesubtitles", "error")
+        end
+    end
+
+    h.runAsync(ffmpegCommand, tryMerge, onSubtitleFail)
+
+    return true
+end
+
+function this.getPath(key)
+
+    this.hash = this.hash or h.hash(mp.get_property("path"))
+
+    local fullPath
+
+    if key == "csvfile" then
+
+        fullPath = utils.join_path(this.paths.script, "language-codes-3b2.csv")
+    elseif key == "scriptfile" then
+
+        fullPath = utils.join_path(this.paths.script, "main.lua")
+    elseif key == "configfile" then
+
+        fullPath = utils.join_path(this.paths.config, "dualsubtitles.conf")
+    elseif key == "videofile" then
+
+        fullPath = mp.get_property("path")
+    elseif key == "cachelanguagefile" then
+
+        fullPath = utils.join_path(this.paths.temp, this.cacheDir..this.seperator..this.files.language..".json")
+    elseif key == "cachepath" then
+
+        fullPath = utils.join_path(this.paths.temp, this.cacheDir)
+    elseif key == "cachepathmerge" then
+
+        fullPath = utils.join_path(this.paths.temp, this.cacheDir..this.seperator..this.hash)
+    elseif key == "cachebottomfile" then
+
+        fullPath = utils.join_path(this.paths.temp, this.cacheDir..this.seperator..this.hash..this.seperator..this.files.bottom..".ass")
+    elseif key == "cachetopfile" then
+
+        fullPath = utils.join_path(this.paths.temp, this.cacheDir..this.seperator..this.hash..this.seperator..this.files.top..".ass")
+    elseif key == "cachemergedfile" then
+
+        fullPath = utils.join_path(this.paths.temp, this.cacheDir..this.seperator..this.hash..this.seperator..this.files.merged..".ass")
+    end
+
+    fullPath = fullPath:gsub("\\", "/")
+    fullPath = mp.command_native({'expand-path', fullPath})
+
+    return fullPath
+end
+
+function this.updateList(tracks)
+
+    if #tracks ~= this.prevTrackCount then
+
+        local firstUpdate = (this.prevTrackCount == 0) and true or false
+
+        this.subtitles = getSubtitleList()
+
+        if not firstUpdate then h.log("Subtitle list updated") end
+    end
+end
+
+function this.load()
+
+    local langMap   = getLanguageMap(this.config.bottom_languages..","..this.config.top_languages)
+    local bottomSid = getSidByLanguage(mergeLanguages(this.config.bottom_languages, langMap))
+    local topSid    = getSidByLanguage(mergeLanguages(this.config.top_languages,    langMap))
+
+    this.set(bottomSid, topSid)
+
+    return this.bottom or this.top
+end
+
+function this.loadDefaults()
+
+    local bottomSid = mp.get_property_number("sid",           0)
+    local topSid    = mp.get_property_number("secondary-sid", 0)
+
+    this.set(bottomSid, topSid)
+
+    return this.bottom or this.top
+end
+
+function this.loadMerged()
+
+    if checkPath(this.getPath("cachemergedfile")) then
+
+        mp.commandv("sub-add", this.getPath("cachemergedfile"))
+
+        local loaded = mp.get_property_native("current-tracks/sub")
+        this.merged  = subtitle:new(loaded)
+
+        return true
+    end
+
+    return false
+end
+
+function this.toggle(bottom, top)
+
+    mp.set_property_native("sub-visibility",           (bottom == 1) and "yes" or "no")
+    mp.set_property_native("secondary-sub-visibility", (top == 1)    and "yes" or "no")
+end
+
+function this.count()
+
+    return #this.subtitles
+end
+
+function this.set(bottomSid, topSid)
+
+    this.bottom = (bottomSid > 0) and this.subtitles[bottomSid] or nil
+    this.top    = (topSid > 0)    and this.subtitles[topSid]    or nil
+end
+
+function this.display()
+
+    mp.set_property_native("sid",           this.bottom and this.bottom.id or 0)
+    mp.set_property_native("secondary-sid", this.top    and this.top.id    or 0)
+end
+
+function this.init(config)
+
+    this.config = config
+end
+
+return this
