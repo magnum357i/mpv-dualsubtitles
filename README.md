@@ -28,13 +28,13 @@ Forced subtitles are never selected when full subtitles are available, even if t
 Create a file named `dualsubtitles.conf` in the script-opts directory, and copy the content below into it. You can now modify the settings as desired.
 
 ```ini
-# Bottom subtitle selection at startup (external subs included)
-bottom_languages=en-us,ja-jp
-
 # Top subtitle selection at startup (external subs included)
 top_languages=tr-tr
 
-# Exclude subtitles with these words in their title (does not work for external subs because their title is broken)
+# Bottom subtitle selection at startup (external subs included)
+bottom_languages=en-us,ja-jp
+
+# Exclude subtitles with these words in their title
 ignored_words=sign,song
 
 # Set top subtitle as bottom subtitle if bottom subtitle is missing
@@ -49,13 +49,22 @@ hover_height_percent=50
 # Style settings for the merged subtitle
 # In mpv, styling options for the secondary subtitle are very limited.
 # By merging the subtitles, you can work around this limitation. If your video file is on an HDD, this process may take 2–3 minutes.
-bottom_style=fn:Arial,fs:70,1c:&H00FFFFFF,2c:&H000000FF,3c:&H00000000,4c:&H00000000,b:0,i:0,u:0,s:0,sx:100,sy:100,fsp:0,frz:0,bs:1,bord:3,shad:0,an:2,ml:0,mr:0,mv:40,enc:1
 top_style=fn:Arial,fs:70,1c:&H0000DEFF,2c:&H000000FF,3c:&H00000000,4c:&H00000000,b:0,i:0,u:0,s:0,sx:100,sy:100,fsp:0,frz:0,bs:1,bord:3,shad:0,an:8,ml:0,mr:0,mv:40,enc:1
+bottom_style=fn:Arial,fs:70,1c:&H00FFFFFF,2c:&H000000FF,3c:&H00000000,4c:&H00000000,b:0,i:0,u:0,s:0,sx:100,sy:100,fsp:0,frz:0,bs:1,bord:3,shad:0,an:2,ml:0,mr:0,mv:40,enc:1
+
+# Tags for the merged subtitle
+# When a line is stripped based on your current settings, these tags will be added to it.
+top_tags=
+bottom_tags=\blur4
 
 # Don’t strip sign lines
 # If the ASS file contains sign lines (lines with a pos tag) and you don’t want them to be stripped, you can use this option.
 # Valid options: bottom, top, and none
 keep_ts=none
+
+# Removes entries like "(wind blowing)" or "MAN 1:"
+# Don’t expect perfect results, and the feature only applies to subtitles marked as SDH.
+remove_sdh_entries=no
 ```
 
 # External Subtitles

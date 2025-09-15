@@ -34,15 +34,54 @@ local function filterSubtitle(subtitle,wordstofilter)
 
     local stitle = subtitle.title and subtitle.title:lower() or nil
 
-    if subtitle.forced                              then return false end
+    if subtitle.forced and not subtitle.default     then return false end
     if stitle and h.hasValue(wordstofilter, stitle) then return false end
 
     return true
 end
 
-local function stripLine(text)
+local function sdhKiller(text)
 
-    if text:match("%}%s*m%s+%d+%s+%d+") then return "" end
+    local count             = 0
+    local soundDescriptions = "[%[%(].-[%]%)]"
+    local speakerDash       = "%s*%-%s*"
+
+    --sound descriptions with speaker lines (two lines)
+    text, count = text:gsub("^"..speakerDash..soundDescriptions.."%s*\\N"..speakerDash..soundDescriptions.."%s*$", "")
+
+    if count > 0 then return "" end
+
+    --sound descriptions with speaker lines (first line)
+    text = text:gsub("^"..speakerDash..soundDescriptions.."%s*\\N%s*%-%s-", "")
+
+    --sound descriptions with speaker lines (second line)
+    text, count = text:gsub(speakerDash..soundDescriptions.."%s*$", "")
+
+    if count > 0 then
+
+        text = text:gsub("^"..speakerDash, "")
+    end
+
+    --sound descriptions
+    text = text:gsub("%s*"..soundDescriptions.."%s*", " ")
+
+    --speaker names
+    text = text:gsub("\\N"..speakerDash.."[^:]*:%s*", "\\N- ")
+    text = text:gsub("^"..speakerDash.."[^:]*:%s*", "- ")
+
+    --fixes
+    text = text:gsub("^[^:]*:%s*", "")
+    text = text:gsub("^%s*\\N%s*", "")
+    text = text:gsub("%s*\\N%s*$", "")
+    text = text:gsub("^"..speakerDash.."$", "")
+
+    --trim
+    text = text:match("^%s*(.-)%s*$")
+
+    return text
+end
+
+local function stripLine(text)
 
     return text:gsub("%{[^%}]*%}", "")
 end
@@ -116,7 +155,7 @@ local function getSidByLanguage(languageCodes)
                 founded = true
                 table.insert(selectedSubtitles, subtitle)
 
-                if not subtitle.size == 0 and not missingMetadata then missingMetadata = true end
+                if subtitle.size == 0 and not missingMetadata then missingMetadata = true end
             end
         end
 
@@ -125,12 +164,9 @@ local function getSidByLanguage(languageCodes)
 
     if #selectedSubtitles > 1 and missingMetadata then h.notify("There are subtitles with missing metadata.", "findsubtitle", "warn") end
 
-    local subId = 0
+    local subId = (#selectedSubtitles > 0) and selectedSubtitles[1].id or 0
 
-    if #selectedSubtitles == 1 then
-
-        subId = selectedSubtitles[1].id
-    elseif #selectedSubtitles > 1 then
+    if #selectedSubtitles > 1 then
 
         table.sort(selectedSubtitles, function(a, b)
 
@@ -139,16 +175,12 @@ local function getSidByLanguage(languageCodes)
 
         for _, subtitle in ipairs(selectedSubtitles) do
 
-            local stitle = subtitle.title and subtitle.title:lower() or nil
-
             if not subtitle.hearingimpaired then
 
                 subId = subtitle.id
                 break
             end
         end
-
-        subId = (subId == 0) and selectedSubtitles[1].id or subId
     end
 
     return subId
@@ -161,7 +193,7 @@ local function getLanguageMap(allLanguages)
     local cacheFileInfo  = utils.file_info(this.getPath("cachelanguagefile"))
 
     if not configFileInfo then configFileInfo = utils.file_info(this.getPath("scriptfile")) end
-    if configFileInfo and cacheFileInfo and tonumber(configFileInfo.mtime) > tonumber(cacheFileInfo.mtime) then os.remove(this.getPath("cachelanguagefile")) end
+    if configFileInfo and cacheFileInfo and tonumber(configFileInfo.mtime) > tonumber(cacheFileInfo.mtime) then removePath(this.getPath("cachelanguagefile")) end
 
     handle = io.open(this.getPath("cachelanguagefile"), "r")
 
@@ -188,7 +220,7 @@ local function getLanguageMap(allLanguages)
 
         for _, lang in ipairs(allLanguages) do
 
-            table.insert(langKeys, lang:find("%-") and lang:gsub("%-.+","") or lang)
+            table.insert(langKeys, lang:find("-") and lang:gsub("%-.+","") or lang)
         end
 
         for line in handle:lines() do
@@ -274,8 +306,6 @@ end
 
 local function copySubtitleToTemp(subtitle, key)
 
-    if not (subtitle.ext == ".srt" or subtitle.ext == ".ass") then return false end
-
     local sourceFile = subtitle.path
     local targetFile = this.getPath("cache"..key.."file")
 
@@ -317,7 +347,7 @@ local function mergeSubtitles()
 
                 for style in content:gmatch("Style:[^\n]+") do
 
-                local preStyleName, styleName, postStyleName = style:match("(Style:%s+)([^,]+)([^\n]+)")
+                    local preStyleName, styleName, postStyleName = style:match("(Style:%s)([^,]+)([^\n]+)")
 
                     if styleName then
 
@@ -334,13 +364,23 @@ local function mergeSubtitles()
 
                 if text then
 
-                    if not (this.config.keep_ts == v.subType and isSign(text)) then
+                    if this.config.keep_ts == v.subType and isSign(text) then
+
+                        style = v.style..style
+                    elseif not text:match("%}%s*m%s+%d+%s+%d+") then
 
                         text  = stripLine(text)
                         style = v.style
-                    else
 
-                        style = v.style..style
+                        if this.config.remove_sdh_entries and this[v.subType].hearingimpaired then
+
+                            text = sdhKiller(text)
+                        end
+
+                        if text ~= "" and this.config[v.subType.."_tags"] ~= "" then
+
+                            text = string.format("{%s}%s", this.config[v.subType.."_tags"], text)
+                        end
                     end
 
                     if text ~= "" then table.insert(lines, preStyle..style..postStyle..text) end
@@ -355,7 +395,7 @@ local function mergeSubtitles()
 
     if scount ~= 2 then
 
-        h.notify("There is a missing or corrupted subtitle.", "mergesubtitles", "error")
+        h.notify("There is a missing or corrupted subtitle.", "mergesubtitles", "error", 30)
 
         return false
     end
@@ -402,19 +442,6 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     return true
 end
 
-function this.deleteMerged()
-
-    if not this.merged then return false end
-
-    mp.commandv("sub-remove", this.merged.id)
-
-    removePath(this.getPath("cachepathmerge"))
-
-    this.merged = nil
-
-    return true
-end
-
 local mergeStart
 
 local function tryMerge()
@@ -427,13 +454,26 @@ local function tryMerge()
         this.display()
 
         mp.commandv("sub-add", this.getPath("cachemergedfile"))
+        this.updateList(0)
 
-        local loaded  = mp.get_property_native("current-tracks/sub")
-        this.merged   = subtitle:new(loaded)
+        this.merged   = this.subtitles[mp.get_property_number("sid")]
         local elapsed = mp.get_time() - mergeStart
 
-        h.notify(string.format("Subtitles is merged. Took %d seconds.", elapsed), "mergesubtitles", "info")
+        h.notify(string.format("Subtitles is merged. Took %d seconds.", elapsed), "mergesubtitles", "info", 30)
     end
+end
+
+function this.deleteMerged()
+
+    if not this.merged then return false end
+
+    mp.commandv("sub-remove", this.merged.id)
+
+    removePath(this.getPath("cachepathmerge"))
+
+    this.merged = nil
+
+    return true
 end
 
 function this.merge()
@@ -601,13 +641,12 @@ function this.getPath(key)
     return fullPath
 end
 
-function this.updateList(tracks)
+function this.updateList(trackcount)
 
-    if #tracks ~= this.prevTrackCount then
+    if trackcount ~= this.prevTrackCount then
 
-        local firstUpdate = (this.prevTrackCount == 0) and true or false
-
-        this.subtitles = getSubtitleList()
+        local firstUpdate = (this.prevTrackCount == 0)
+        this.subtitles    = getSubtitleList()
 
         if not firstUpdate then h.log("Subtitle list updated") end
     end
@@ -618,6 +657,13 @@ function this.load()
     local langMap   = getLanguageMap(this.config.bottom_languages..","..this.config.top_languages)
     local bottomSid = getSidByLanguage(mergeLanguages(this.config.bottom_languages, langMap))
     local topSid    = getSidByLanguage(mergeLanguages(this.config.top_languages,    langMap))
+
+    if bottomSid > 0 and bottomSid == topSid then
+
+        h.notify("The IDs of the top and bottom subtitles are the same.", "sameinput", "error")
+
+        return false
+    end
 
     this.set(bottomSid, topSid)
 
@@ -653,11 +699,6 @@ function this.toggle(bottom, top)
 
     mp.set_property_native("sub-visibility",           (bottom == 1) and "yes" or "no")
     mp.set_property_native("secondary-sub-visibility", (top == 1)    and "yes" or "no")
-end
-
-function this.count()
-
-    return #this.subtitles
 end
 
 function this.set(bottomSid, topSid)

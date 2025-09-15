@@ -5,20 +5,22 @@ subtitle.__index = subtitle
 
 local function isForced(trackInfo)
 
-    if trackInfo.forced then return true end
+    if trackInfo.forced     then return true  end
+    if not trackInfo.title  then return false end
 
-    local stitle = subtitle.title and subtitle.title:lower() or nil
+    local stitle = trackInfo.title:lower()
 
-    return stitle and stitle:find("forced")
+    return stitle:find("forced") and true or false
 end
 
 local function isHearingImpaired(trackInfo)
 
-    if trackInfo.hearing_impaired then return true end
+    if trackInfo.hearing_impaired then return true  end
+    if not trackInfo.title        then return false end
 
-    local stitle = subtitle.title and subtitle.title:lower() or nil
+    local stitle = trackInfo.title:lower()
 
-    return stitle and (stitle:find("sdh") or stitle:find("cc"))
+    return (stitle:find("sdh") or stitle:find("cc")) and true or false
 end
 
 local function getExt(trackInfo)
@@ -41,19 +43,19 @@ end
 
 function subtitle:new(trackInfo)
 
-    local obj = {}
+    local obj           = {}
 
     obj.id              = trackInfo.id
     obj.title           = trackInfo.title
     obj.ext             = getExt(trackInfo)
     obj.textbased       = (obj.ext and obj.ext == ".srt" or obj.ext and obj.ext == ".ass")
-    obj.external        = trackInfo.external or false
+    obj.external        = trackInfo.external
     obj.lang            = trackInfo.lang
     obj.size            = trackInfo.metadata and trackInfo.metadata.NUMBER_OF_BYTES or 0
     obj.default         = trackInfo.default
     obj.forced          = isForced(trackInfo)
     obj.hearingimpaired = isHearingImpaired(trackInfo)
-    obj.visualimpaired  = trackInfo["visual-impaired"]
+    obj.visualimpaired  = trackInfo["visual-impaired"] and true or false
     obj.path            = trackInfo["external-filename"]
 
     if obj.external then
