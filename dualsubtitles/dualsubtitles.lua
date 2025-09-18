@@ -1,9 +1,11 @@
-local mp       = require "mp"
-local msg      = require "mp.msg"
-local utils    = require "mp.utils"
-local h        = require "helpers"
-local subtitle = require "subtitle"
-local this     = {
+local mp        = require "mp"
+local msg       = require "mp.msg"
+local utils     = require "mp.utils"
+local h         = require "helpers"
+local subtitle  = require "subtitle"
+local resampler = require "resampler"
+
+local this      = {
 
     isWindows      = package.config:sub(1, 1) ~= '/',
     seperator      = isWindows and "//" or "\\",
@@ -91,6 +93,11 @@ local function isSign(text)
     return text:find("\\pos%([%d%s%.,]+%)") or text:find("\\move%([%d%s%.,]+%)")
 end
 
+local function isShapeLine(text)
+
+    return text:match("%}%s*m%s+%d+%s+%d+")
+end
+
 local function getSubtitleList()
 
     local list   = {}
@@ -129,10 +136,10 @@ local function removePath(path)
 
         if this.isWindows then
 
-            os.execute(string.format("rmdir /s /q \"%s\"", path))
+            h.runCommand({"powershell", "-NoProfile", "-Command", string.format("Remove-Item -Recurse -Force -LiteralPath \"%s\"", path)})
         else
 
-            os.execute(string.format("rmdir -rf \"%s\"", path))
+            h.runCommand({"rm", "-rf", path})
         end
     end
 
@@ -190,12 +197,12 @@ local function getLanguageMap(allLanguages)
 
     local handle
     local configFileInfo = utils.file_info(this.getPath("configfile"))
-    local cacheFileInfo  = utils.file_info(this.getPath("cachelanguagefile"))
+    local cacheFileInfo  = utils.file_info(this.getPath("cache/languagefile"))
 
     if not configFileInfo then configFileInfo = utils.file_info(this.getPath("scriptfile")) end
-    if configFileInfo and cacheFileInfo and tonumber(configFileInfo.mtime) > tonumber(cacheFileInfo.mtime) then removePath(this.getPath("cachelanguagefile")) end
+    if configFileInfo and cacheFileInfo and tonumber(configFileInfo.mtime) > tonumber(cacheFileInfo.mtime) then removePath(this.getPath("cache/languagefile")) end
 
-    handle = io.open(this.getPath("cachelanguagefile"), "r")
+    handle = io.open(this.getPath("cache/languagefile"), "r")
 
     if handle then
 
@@ -239,20 +246,20 @@ local function getLanguageMap(allLanguages)
 
         if isFilled then
 
-            local tempPath = this.getPath("cachepath")
+            local tempPath = this.getPath("cache")
 
             if not checkPath(tempPath) then
 
                 if this.isWindows then
 
-                    os.execute(string.format("mkdir \"%s\"", tempPath))
+                    h.runCommand({"powershell", "-NoProfile", "-Command", "mkdir", tempPath})
                 else
 
-                    os.execute(string.format("mkdir -p \"%s\"", tempPath))
+                    h.runCommand({"mkdir", "-p", tempPath})
                 end
             end
 
-            handle = io.open(this.getPath("cachelanguagefile"), "w")
+            handle = io.open(this.getPath("cache/languagefile"), "w")
 
             if handle then
 
@@ -307,14 +314,20 @@ end
 local function copySubtitleToTemp(subtitle, key)
 
     local sourceFile = subtitle.path
-    local targetFile = this.getPath("cache"..key.."file")
+    local targetFile = this.getPath("cache/"..key.."file")
 
     if subtitle.ext == ".ass" then
 
-        os.execute(string.format("copy \"%s\" \"%s\"", sourceFile, targetFile))
+        if this.isWindows then
+
+            h.runCommand({"powershell", "-NoProfile", "-Command", string.format("Copy-Item -LiteralPath \"%s\" -Destination \"%s\" -Force", sourceFile, targetFile)})
+        else
+
+            h.runCommand({"cp", sourceFile, targetFile})
+        end
     else
 
-        os.execute(string.format("ffmpeg -i \"%s\" -c:s ass \"%s\"", sourceFile, targetFile))
+        h.runCommand({"ffmpeg", "-i", sourceFile, "-c:s", "ass", targetFile})
     end
 
     return checkPath(targetFile)
@@ -324,8 +337,8 @@ local function mergeSubtitles()
 
     local data = {
 
-        {path = this.getPath("cachebottomfile"), style = "Primary",   subType = "bottom"},
-        {path = this.getPath("cachetopfile"),    style = "Secondary", subType = "top"}
+        {path = this.getPath("cache/bottomfile"), style = "Primary",   subType = "bottom"},
+        {path = this.getPath("cache/topfile"),    style = "Secondary", subType = "top"}
     }
 
     local file
@@ -343,7 +356,15 @@ local function mergeSubtitles()
 
             file:close()
 
+            local playResX, playResY, isResampler
+
             if this.config.keep_ts == v.subType then
+
+                playResX    = content:match("PlayResX: (%d+)") or 0
+                playResY    = content:match("PlayResY: (%d+)") or 0
+                isResampler = (tonumber(playResX) == 1920 and tonumber(playResY) == 1080) and false or true
+
+                if isResampler then resampler.setResolutions(playResX, playResY, 1920, 1080) end
 
                 for style in content:gmatch("Style:[^\n]+") do
 
@@ -351,9 +372,10 @@ local function mergeSubtitles()
 
                     if styleName then
 
-                        styleName = v.style..styleName
+                        styleName      = v.style..styleName
+                        local newStyle = isResampler and resampler.resampleStyle(preStyleName..styleName..postStyleName) or preStyleName..styleName..postStyleName
 
-                        table.insert(styles, preStyleName..styleName..postStyleName)
+                        table.insert(styles, newStyle)
                     end
                 end
             end
@@ -364,15 +386,18 @@ local function mergeSubtitles()
 
                 if text then
 
+                    local newLine
+
                     if this.config.keep_ts == v.subType and isSign(text) then
 
-                        style = v.style..style
-                    elseif not text:match("%}%s*m%s+%d+%s+%d+") then
+                        style   = v.style..style
+                        newLine = isResampler and resampler.resampleDialogue(preStyle..style..postStyle..text) or preStyle..style..postStyle..text
+                    elseif not isShapeLine(text) then
 
                         text  = stripLine(text)
                         style = v.style
 
-                        if this.config.remove_sdh_entries and this[v.subType].hearingimpaired then
+                        if this.config.remove_sdh_entries then
 
                             text = sdhKiller(text)
                         end
@@ -381,9 +406,11 @@ local function mergeSubtitles()
 
                             text = string.format("{%s}%s", this.config[v.subType.."_tags"], text)
                         end
+
+                        newLine = preStyle..style..postStyle..text
                     end
 
-                    if text ~= "" then table.insert(lines, preStyle..style..postStyle..text) end
+                    if text ~= "" then table.insert(lines, newLine) end
                 end
             end
 
@@ -431,7 +458,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         header = header:gsub("\n<extrastyles>", "")
     end
 
-    file = io.open(this.getPath("cachemergedfile"), "w")
+    file = io.open(this.getPath("cache/mergedfile"), "w")
 
     file:write(header)
 
@@ -453,7 +480,7 @@ local function tryMerge()
         this.set(0, 0)
         this.display()
 
-        mp.commandv("sub-add", this.getPath("cachemergedfile"))
+        mp.commandv("sub-add", this.getPath("cache/mergedfile"))
         this.updateList(0)
 
         this.merged   = this.subtitles[mp.get_property_number("sid")]
@@ -469,14 +496,14 @@ function this.deleteMerged()
 
     mp.commandv("sub-remove", this.merged.id)
 
-    removePath(this.getPath("cachepathmerge"))
+    removePath(this.getPath("cache/merge"))
 
     this.merged = nil
 
     return true
 end
 
-function this.merge()
+local function mergeProcess()
 
     if not (this.bottom and this.top) then
 
@@ -495,16 +522,16 @@ function this.merge()
     h.notify("Please wait...", "mergesubtitles", "info", 9999)
 
     mergeStart     = mp.get_time()
-    local tempPath = this.getPath("cachepathmerge")
+    local tempPath = this.getPath("cache/merge")
 
     if not checkPath(tempPath) then
 
         if this.isWindows then
 
-            os.execute(string.format("mkdir \"%s\"", tempPath))
+            h.runCommand({"powershell", "-NoProfile", "-Command", "mkdir", tempPath})
         else
 
-            os.execute(string.format("mkdir -p \"%s\"", tempPath))
+            h.runCommand({"mkdir", "-p", tempPath})
         end
     end
 
@@ -551,7 +578,7 @@ function this.merge()
         table.insert(args, string.format("0:s:%s", this.bottom.id - 1))
         table.insert(args, "-c:s")
         table.insert(args, "ass")
-        table.insert(args, this.getPath("cachebottomfile"))
+        table.insert(args, this.getPath("cache/bottomfile"))
     end
 
     if this.top and not this.top.external then
@@ -560,7 +587,7 @@ function this.merge()
         table.insert(args, string.format("0:s:%s", this.top.id - 1))
         table.insert(args, "-c:s")
         table.insert(args, "ass")
-        table.insert(args, this.getPath("cachetopfile"))
+        table.insert(args, this.getPath("cache/topfile"))
     end
 
     table.insert(args, "-vn")
@@ -597,6 +624,17 @@ function this.merge()
     return true
 end
 
+function this.merge()
+
+    local ok, err = pcall(mergeProcess)
+
+    if not ok then
+
+        h.notify(err, "mergesubtitles", "error")
+        h.notify("See the console for details.", "mergesubtitles", "error")
+    end
+end
+
 function this.getPath(key)
 
     this.hash = this.hash or h.hash(mp.get_property("path"))
@@ -615,22 +653,22 @@ function this.getPath(key)
     elseif key == "videofile" then
 
         fullPath = mp.get_property("path")
-    elseif key == "cachelanguagefile" then
+    elseif key == "cache/languagefile" then
 
         fullPath = utils.join_path(this.paths.temp, this.cacheDir..this.seperator..this.files.language..".json")
-    elseif key == "cachepath" then
+    elseif key == "cache" then
 
         fullPath = utils.join_path(this.paths.temp, this.cacheDir)
-    elseif key == "cachepathmerge" then
+    elseif key == "cache/merge" then
 
         fullPath = utils.join_path(this.paths.temp, this.cacheDir..this.seperator..this.hash)
-    elseif key == "cachebottomfile" then
+    elseif key == "cache/bottomfile" then
 
         fullPath = utils.join_path(this.paths.temp, this.cacheDir..this.seperator..this.hash..this.seperator..this.files.bottom..".ass")
-    elseif key == "cachetopfile" then
+    elseif key == "cache/topfile" then
 
         fullPath = utils.join_path(this.paths.temp, this.cacheDir..this.seperator..this.hash..this.seperator..this.files.top..".ass")
-    elseif key == "cachemergedfile" then
+    elseif key == "cache/mergedfile" then
 
         fullPath = utils.join_path(this.paths.temp, this.cacheDir..this.seperator..this.hash..this.seperator..this.files.merged..".ass")
     end
@@ -682,9 +720,9 @@ end
 
 function this.loadMerged()
 
-    if checkPath(this.getPath("cachemergedfile")) then
+    if checkPath(this.getPath("cache/mergedfile")) then
 
-        mp.commandv("sub-add", this.getPath("cachemergedfile"))
+        mp.commandv("sub-add", this.getPath("cache/mergedfile"))
 
         local loaded = mp.get_property_native("current-tracks/sub")
         this.merged  = subtitle:new(loaded)

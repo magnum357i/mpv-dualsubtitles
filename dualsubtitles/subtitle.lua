@@ -32,10 +32,10 @@ local function getExt(trackInfo)
     return nil
 end
 
-local function detectSubtitleInfo(path)
+local function detectSubtitleInfo(trackInfo)
 
-    local externalSubtitle = utils.file_info(path)
-    local lang             = path:match(".+[%.%-%s]([a-zA-Z][a-zA-Z][a-zA-Z]?)[%.%-%s]")
+    local externalSubtitle = utils.file_info(trackInfo["external-filename"])
+    local lang             = trackInfo.title and trackInfo.title:match("[%.%-%s]?([a-zA-Z][a-zA-Z][a-zA-Z]?)%.[a-z][a-z][a-z]$") or nil
     local bytes            = externalSubtitle and externalSubtitle.size or 0
 
     return lang, bytes
@@ -60,10 +60,10 @@ function subtitle:new(trackInfo)
 
     if obj.external then
 
-        local lang, bytes = detectSubtitleInfo(obj.path)
+        local lang, bytes = detectSubtitleInfo(trackInfo)
 
-        obj.lang = lang
-        obj.size = bytes
+        obj.lang          = obj.lang or lang
+        obj.size          = bytes
     end
 
     setmetatable(obj, self)

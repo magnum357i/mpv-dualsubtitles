@@ -87,6 +87,18 @@ function this.runAsync(args, handleSuccess, handleFail)
     end)
 end
 
+function this.runCommand(args)
+
+    return mp.command_native({
+
+        name           = 'subprocess',
+        playback_only  = false,
+        capture_stdout = true,
+        capture_stderr = true,
+        args           = args
+    })
+end
+
 function this.hash(str)
 
     local h1, h2, h3 = 0, 0, 0

@@ -4,7 +4,7 @@ https://github.com/magnum357i/mpv-dualsubtitles/
 
 ╔════════════════════════════════╗
 ║        MPV dualsubtitles       ║
-║              v2.2.1            ║
+║              v2.2.2            ║
 ╚════════════════════════════════╝
 
 ## Required ##
@@ -22,26 +22,30 @@ local mp       = require "mp"
 local options  = require "mp.options"
 local h        = require "helpers"
 local subtitle = require "dualsubtitles"
+local test     = require "resampler"
 
 local config   = {
 
     --auto select
-    top_languages        = "tr-tr",
-    bottom_languages     = "en-us,ja-jp",
-    ignored_words        = "sign,song",
-    use_top_as_bottom    = true,
+    top_languages          = "tr-tr",
+    bottom_languages       = "en-us,ja-jp",
+    ignored_words          = "sign,song",
+    use_top_as_bottom      = true,
 
     --hover for secondary
-    secondary_on_hover   = false,
-    hover_height_percent = 50,
+    secondary_on_hover     = false,
+    hover_height_percent   = 50,
 
     --merged subtitle
-    top_style            = "fn:Segoe UI Semibold,fs:70,1c:&H0000DEFF,2c:&H000000FF,3c:&H00000000,4c:&H00000000,b:0,i:0,u:0,s:0,sx:100,sy:100,fsp:0,frz:0,bs:1,bord:4,shad:0,an:8,ml:0,mr:0,mv:40,enc:1",
-    bottom_style         = "fn:Calibri,fs:70,1c:&H00FFFFFF,2c:&H000000FF,3c:&H00000000,4c:&H00000000,b:0,i:0,u:0,s:0,sx:100,sy:100,fsp:0,frz:0,bs:1,bord:1.5,shad:0,an:2,ml:0,mr:0,mv:40,enc:1",
-    top_tags             = "",
-    bottom_tags          = "\\blur4",
-    keep_ts              = "none", --bottom, top, none
-    remove_sdh_entries   = false --Don’t count on it working perfectly. If you have a SDH subtitle, and the cues are very distracting, you might want to try this setting.
+    top_style              = "fn:Segoe UI Semibold,fs:70,1c:&H0000DEFF,2c:&H000000FF,3c:&H00000000,4c:&H00000000,b:0,i:0,u:0,s:0,sx:100,sy:100,fsp:0,frz:0,bs:1,bord:4,shad:0,an:8,ml:0,mr:0,mv:40,enc:1",
+    bottom_style           = "fn:Calibri,fs:70,1c:&H00FFFFFF,2c:&H000000FF,3c:&H00000000,4c:&H00000000,b:0,i:0,u:0,s:0,sx:100,sy:100,fsp:0,frz:0,bs:1,bord:1.5,shad:0,an:2,ml:0,mr:0,mv:40,enc:1",
+    top_tags               = "",
+    bottom_tags            = "\\blur4",
+    keep_ts                = "none", --bottom, top, none
+    remove_sdh_entries     = false,
+
+    --external subtitles
+    expand_subtitle_search = false
 }
 
 options.read_options(config, "dualsubtitles")
@@ -189,9 +193,27 @@ mp.add_key_binding("Ctrl+B", "deletemergedfile", deleteMergedFile)
 
 mp.observe_property("track-list", "native", updateSubtitleList)
 
+if config.expand_subtitle_search then
+
+    mp.add_hook("on_load", 50, function ()
+
+        local newPaths = {}
+        local paths    = mp.get_property_native("sub-file-paths")
+        local filename = mp.get_property("filename/no-ext")
+
+        for _, p in ipairs(paths) do
+
+            table.insert(newPaths, p)
+            table.insert(newPaths, p.."/"..filename)
+        end
+
+        if #newPaths > 0 then mp.set_property_native("sub-file-paths", newPaths) end
+    end)
+end
+
 if config.secondary_on_hover then
 
-    local function showSecondaryOnHover(_, mouse)
+    mp.observe_property("mouse-pos", "native", function(_, mouse)
 
         if not mp.get_property_number("secondary-sid", 0) then return end
 
@@ -205,7 +227,5 @@ if config.secondary_on_hover then
 
             subtitle.toggle(1,0)
         end
-    end
-
-    mp.observe_property("mouse-pos", "native", showSecondaryOnHover)
+    end)
 end
