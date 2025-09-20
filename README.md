@@ -3,6 +3,45 @@ Dual subtitles plugin for mpv.
 
 ![Example for Dual Subtitles](https://github.com/magnum357i/mpv-dualsubtitles/blob/main/mpv-shot0001.jpg)
 
+# Installation
+
+1. Install FFmpeg.
+
+    #### Windows (Powershell)
+
+    ```
+    New-Item -ItemType Directory -Path "C:\FFmpeg"; Set-Location "C:\FFmpeg"
+    Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-git-full.7z" -OutFile "FFmpeg.7z"
+    tar -xf FFmpeg.7z
+    Get-ChildItem -Directory "*build" | ForEach-Object { Move-Item "$_\bin" . }
+    Remove-Item "ffmpeg*" -Recurse -Force
+    [Environment]::SetEnvironmentVariable("Path", ([Environment]::GetEnvironmentVariable("Path","User") + ";C:\FFmpeg\bin"), "User")
+    ```
+
+    *Please run as administrator.*
+
+    #### Linux
+
+    ```
+    pacman -S ffmpeg
+    ```
+
+2. Download the files and copy them to your mpv scripts folder.
+
+    #### Windows (CMD)
+
+    ```
+    git clone --depth 1 https://github.com/magnum357i/mpv-dualsubtitles "%TEMP%\gitmpvdualsubtitles"
+    xcopy /E /I /Y "%TEMP%\gitmpvdualsubtitles\dualsubtitles" "%APPDATA%\mpv\scripts\dualsubtitles"
+    ```
+
+    #### Linux
+
+    ```
+    git clone --depth 1 https://github.com/magnum357i/mpv-dualsubtitles /tmp/gitmpvdualsubtitles
+    mkdir -p ~/.config/mpv/scripts && cp -r /tmp/gitmpvdualsubtitles/dualsubtitles ~/.config/mpv/scripts/
+    ```
+
 # Key Bindings
 | shortcut            | description                               |
 | ------------------- | ----------------------------------------- |
@@ -112,7 +151,7 @@ sub-auto=all
 sub-file-paths=subs;subtitles
 ```
 
-*(Subtitles are usually located in these directories.)*
+*Subtitles are usually located in these directories.*
 
 2) **dualsubtitles.conf**
 
@@ -124,26 +163,3 @@ expand_subtitle_search=yes
 Merging subtitles allows you to have more styling options.
 
 ![Example for Merging Subtitles](https://github.com/magnum357i/mpv-dualsubtitles/blob/main/mpv-shot0002.jpg)
-
-### Clean Up SDH Entries
-
-If cues are distracting, enable the option below.
-
-```ini
-remove_sdh_entries=yes
-```
-
-**NOTE:** Perfect results are not possible.
-
-### ASS Files
-
-It’s possible to merge two ASS subtitles without altering the sign lines of one file.
-
-![Example 2 for Merging Subtitles](https://github.com/magnum357i/mpv-dualsubtitles/blob/main/mpv-shot0003.jpg)
-*TS: Kinoshita Hideyoshi*
-
-For this, use the setting below.
-
-```ini
-keep_ts=bottom
-```
