@@ -55,83 +55,17 @@ function this.setResolutions(sourceX, sourceY, destX, destY)
     ry = destY / sourceY
 end
 
-function this.parseStyle(rawStyle)
-
-    local t = {rawStyle:match("^Style:%s(.-),(.-),(.-),(.-),(.-),(.-),(.-),(.-),(.-),(.-),(.-),(.-),(.-),(.-),(.-),(.-),(.-),(.-),(.-),(.-),(.-),(.-),(.-)$")}
-
-    if not t[1] then return nil end
-
-    return {
-
-        Name            = t[1],
-        Fontname        = t[2],
-        Fontsize        = tonumber(t[3]),
-        PrimaryColour   = t[4],
-        SecondaryColour = t[5],
-        OutlineColour   = t[6],
-        ShadowColour    = t[7],
-        Bold            = tonumber(t[8]),
-        Italic          = tonumber(t[9]),
-        Underline       = tonumber(t[10]),
-        StrikeOut       = tonumber(t[11]),
-        ScaleX          = tonumber(t[12]),
-        ScaleY          = tonumber(t[13]),
-        Spacing         = tonumber(t[14]),
-        Angle           = tonumber(t[15]),
-        BorderStyle     = tonumber(t[16]),
-        Outline         = tonumber(t[17]),
-        Shadow          = tonumber(t[18]),
-        Alignment       = tonumber(t[19]),
-        MarginL         = tonumber(t[20]),
-        MarginR         = tonumber(t[21]),
-        MarginV         = tonumber(t[22]),
-        Encoding        = tonumber(t[23])
-    }
-end
-
-function this.parseDialogue(rawDialogue)
-
-    local t = {rawDialogue:match("^Dialogue:%s([^,]*),([^,]*),([^,]*),([^,]*),([^,]*),([^,]*),([^,]*),([^,]*),([^,]*),(.+)$")}
-
-    if not t[1] then return nil end
-
-    return {
-
-        Layer   = tonumber(t[1]),
-        Start   = t[2],
-        End     = t[3],
-        Style   = t[4],
-        Actor   = t[5],
-        MarginL = tonumber(t[6]),
-        MarginR = tonumber(t[7]),
-        MarginV = tonumber(t[8]),
-        Effect  = t[9],
-        Text    = t[10]
-    }
-end
-
 function this.resampleStyle(style)
 
-    style = this.parseStyle(style)
+    style.Fontsize = math.floor(style.Fontsize * ry + 0.5)
+    style.Outline  = style.Outline * ry
+    style.Shadow   = style.Shadow * ry
+    style.Spacing  = style.Spacing * ry
+    style.MarginL  = math.floor(style.MarginL * rx + 0.5)
+    style.MarginR  = math.floor(style.MarginR * rx + 0.5)
+    style.MarginV  = math.floor(style.MarginV * ry + 0.5)
 
-    if not style then return nil end
-
-    local newStyle = {}
-
-    for k, v in pairs(style) do
-
-        newStyle[k] = v
-    end
-
-    newStyle.Fontsize = math.floor(style.Fontsize * ry + 0.5)
-    newStyle.Outline  = style.Outline * ry
-    newStyle.Shadow   = style.Shadow * ry
-    newStyle.Spacing  = style.Spacing * ry
-    newStyle.MarginL  = math.floor(style.MarginL * rx + 0.5)
-    newStyle.MarginR  = math.floor(style.MarginR * rx + 0.5)
-    newStyle.MarginV  = math.floor(style.MarginV * ry + 0.5)
-
-    return this.styleToString(newStyle)
+    return style
 end
 
 local tagMap = {
@@ -301,81 +235,23 @@ end
 
 function this.resampleDialogue(line)
 
-    line = this.parseDialogue(line)
+    if line.MarginL > 0 then line.MarginL = math.floor(line.MarginL * rx + 0.5) end
+    if line.MarginR > 0 then line.MarginR = math.floor(line.MarginR * rx + 0.5) end
+    if line.MarginV > 0 then line.MarginV = math.floor(line.MarginV * ry + 0.5) end
 
-    if not line then return nil end
-
-    local newLine = {}
-
-    for k, v in pairs(line) do
-
-        newLine[k] = v
-    end
-
-    if newLine.MarginL > 0 then newLine.MarginL = math.floor(newLine.MarginL * rx + 0.5) end
-    if newLine.MarginR > 0 then newLine.MarginR = math.floor(newLine.MarginR * rx + 0.5) end
-    if newLine.MarginV > 0 then newLine.MarginV = math.floor(newLine.MarginV * ry + 0.5) end
-
-    newLine.Text = newLine.Text:gsub("\\([a-zx]+)([^\\%}]+)", function(name, params)
+    line.Text = line.Text:gsub("\\([a-zx]+)([^\\%}]+)", function(name, params)
 
         local result = this.resampleTag(name, params)
 
-        return "\\"..(result and result or name..params)
+        return "\\"..(result or name..params)
     end)
 
-    newLine.Text = newLine.Text:gsub("([%}%(])%s*(m%s+[%d%-%.]+%s+[%d%-%.]+[%s%d%-%."..table.concat(shapeLetters, "").."]+)", function(p, drawing)
+    line.Text = line.Text:gsub("([%}%(])%s*(m%s+[%d%-%.]+%s+[%d%-%.]+[%s%d%-%."..table.concat(shapeLetters, "").."]+)", function(p, drawing)
 
         return string.format("%s%s", p, this.resampleDrawing(drawing))
     end)
 
-    return this.dialogueToString(newLine)
-end
-
-function this.styleToString(style)
-
-    return string.format(
-        "Style: %s,%s,%d,%s,%s,%s,%s,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
-        style.Name,
-        style.Fontname,
-        style.Fontsize,
-        style.PrimaryColour,
-        style.SecondaryColour,
-        style.OutlineColour,
-        style.ShadowColour,
-        style.Bold,
-        style.Italic,
-        style.Underline,
-        style.StrikeOut,
-        style.ScaleX,
-        style.ScaleY,
-        style.Spacing,
-        style.Angle,
-        style.BorderStyle,
-        style.Outline,
-        style.Shadow,
-        style.Alignment,
-        style.MarginL,
-        style.MarginR,
-        style.MarginV,
-        style.Encoding
-    )
-end
-
-function this.dialogueToString(line)
-
-    return string.format(
-        "Dialogue: %d,%s,%s,%s,%s,%d,%d,%d,%s,%s",
-        line.Layer,
-        line.Start,
-        line.End,
-        line.Style,
-        line.Actor,
-        line.MarginL,
-        line.MarginR,
-        line.MarginV,
-        line.Effect,
-        line.Text
-    )
+    return line
 end
 
 return this

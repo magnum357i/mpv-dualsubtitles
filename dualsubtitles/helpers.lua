@@ -57,31 +57,36 @@ function this.splitString(str)
     return list
 end
 
-function this.hasValue(items, value)
-
-    local result = false
+function this.hasItem(items, value)
 
     for _, item in ipairs(items) do
 
-        if value:find(item) then
-
-            result = true
-            break
-        end
+        if item == value then return true end
     end
 
-    return result
+    return false
 end
 
-function this.runAsync(args, handleSuccess, handleFail)
+function this.searchStrings(value, items)
 
-    local proc = mp.command_native_async(args, function(_, result, _)
+    for _, item in ipairs(items) do
+
+        if string.find(value, item, 1, true) then return true end
+    end
+
+    return false
+end
+
+function this.runAsync(cmd, handleSuccess, handleFail)
+
+    local proc = mp.command_native_async(cmd, function(_, result, _)
 
         if result.status == 0 then
 
             handleSuccess()
         else
 
+            this.log(cmd.args)
             handleFail(result.stderr)
         end
     end)

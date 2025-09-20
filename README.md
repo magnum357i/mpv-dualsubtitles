@@ -67,6 +67,12 @@ remove_sdh_entries=no
 # Loads subtitles from subfolders with the same name as the video file
 # Useful for series
 expand_subtitle_search=no
+
+# Italic lines in the source subtitle remain italic after merge.
+detect_italics=yes
+
+# Prevents you from seeing the same text 20 times on the screen.
+remove_repeating_lines=none
 ```
 
 # External Subtitles

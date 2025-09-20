@@ -4,6 +4,7 @@ local utils     = require "mp.utils"
 local h         = require "helpers"
 local subtitle  = require "subtitle"
 local resampler = require "resampler"
+local assline   = require "assline"
 
 local this      = {
 
@@ -37,9 +38,24 @@ local function filterSubtitle(subtitle,wordstofilter)
     local stitle = subtitle.title and subtitle.title:lower() or nil
 
     if subtitle.forced and not subtitle.default     then return false end
-    if stitle and h.hasValue(wordstofilter, stitle) then return false end
+    if stitle and h.searchStrings(stitle, wordstofilter) then return false end
 
     return true
+end
+
+local function hasItalic(text)
+
+    --sdh
+    text = text:gsub("^%s*%[.-%]", "")
+    text = text:gsub("^%s*\\N", "")
+
+    text = "{}"..text
+    text = text:gsub("}%s*{", "")
+    text = text:match("^[^%}]+")
+
+    if text and text:find("\\i1") then return true end
+
+    return false
 end
 
 local function sdhKiller(text)
@@ -81,21 +97,6 @@ local function sdhKiller(text)
     text = text:match("^%s*(.-)%s*$")
 
     return text
-end
-
-local function stripLine(text)
-
-    return text:gsub("%{[^%}]*%}", "")
-end
-
-local function isSign(text)
-
-    return text:find("\\pos%([%d%s%.,]+%)") or text:find("\\move%([%d%s%.,]+%)")
-end
-
-local function isShapeLine(text)
-
-    return text:match("%}%s*m%s+%d+%s+%d+")
 end
 
 local function getSubtitleList()
@@ -234,7 +235,7 @@ local function getLanguageMap(allLanguages)
 
             local iso3, iso2, title = line:gsub('"', ''):gsub('[;,]?%s.+', ''):match("([^,]+),([^,]+),([^,]+)")
 
-            if title and h.hasValue(langKeys, iso2) then
+            if title and h.hasItem(langKeys, iso2) then
 
                 map[iso2] = {iso3, title}
 
@@ -356,61 +357,121 @@ local function mergeSubtitles()
 
             file:close()
 
-            local playResX, playResY, isResampler
+            local playResX, playResY, canResample
+            local italicStyles = {}
 
             if this.config.keep_ts == v.subType then
 
                 playResX    = content:match("PlayResX: (%d+)") or 0
                 playResY    = content:match("PlayResY: (%d+)") or 0
-                isResampler = (tonumber(playResX) == 1920 and tonumber(playResY) == 1080) and false or true
+                canResample = (tonumber(playResX) == 1920 and tonumber(playResY) == 1080) and false or true
 
-                if isResampler then resampler.setResolutions(playResX, playResY, 1920, 1080) end
+                if canResample then resampler.setResolutions(playResX, playResY, 1920, 1080) end
 
                 for style in content:gmatch("Style:[^\n]+") do
 
-                    local preStyleName, styleName, postStyleName = style:match("(Style:%s)([^,]+)([^\n]+)")
+                    style = assline:new(style)
 
-                    if styleName then
+                    if style then
 
-                        styleName      = v.style..styleName
-                        local newStyle = isResampler and resampler.resampleStyle(preStyleName..styleName..postStyleName) or preStyleName..styleName..postStyleName
+                        if this.config.detect_italics and style.Italic then table.insert(italicStyles, style.Name) end
 
-                        table.insert(styles, newStyle)
+                        style.Name = v.style..style.Name
+
+                        if canResample then
+
+                            style = resampler.resampleStyle(style)
+                        end
+
+                        table.insert(styles, style:raw())
                     end
                 end
             end
 
+            local makeItalic, seen = false, {}
+
             for line in content:gmatch("Dialogue:[^\n]+") do
 
-                local preStyle, style, postStyle, text = line:match("^(Dialogue:[^,]*,[^,]*,[^,]*,)([^,]+)(,[^,]*,[^,]*,[^,]*,[^,]*,[^,]*,)(.+)$")
+                local prevStyle
 
-                if text then
+                line = assline:new(line)
 
-                    local newLine
+                if line then
 
-                    if this.config.keep_ts == v.subType and isSign(text) then
+                    local deleteThis = false
 
-                        style   = v.style..style
-                        newLine = isResampler and resampler.resampleDialogue(preStyle..style..postStyle..text) or preStyle..style..postStyle..text
-                    elseif not isShapeLine(text) then
+                    if this.config.keep_ts == v.subType and line:isSign() then
 
-                        text  = stripLine(text)
-                        style = v.style
+                        line.Style = v.style..line.Style
+
+                        if canResample then
+
+                            line = resampler.resampleDialogue(line)
+                        end
+                    elseif not line:isShape() then
+
+                        local text = line:strippedText()
+
+                        if this.config.remove_repeating_lines then
+
+                            local sKey = tostring(line.Start)..tostring(line.End)
+
+                            if seen[sKey] and seen[sKey] == text then
+
+                                deleteThis = true
+
+                                goto continue
+                            else
+
+                                seen[sKey] = text
+                            end
+                        end
+
+                        if this.config.detect_italics then
+
+                            if prevStyle ~= line.Style and h.hasItem(italicStyles, line.Style) then
+
+                                makeItalic = true
+                            else
+
+                                makeItalic = false
+                            end
+
+                            makeItalic = makeItalic or hasItalic(line.Text)
+                        end
 
                         if this.config.remove_sdh_entries then
 
                             text = sdhKiller(text)
+
+                            if text == "" then
+
+                                deleteThis = true
+
+                                goto continue
+                            end
                         end
 
-                        if text ~= "" and this.config[v.subType.."_tags"] ~= "" then
+                        if this.config[v.subType.."_tags"] ~= "" then
 
                             text = string.format("{%s}%s", this.config[v.subType.."_tags"], text)
                         end
 
-                        newLine = preStyle..style..postStyle..text
+                        if makeItalic then
+
+                            text = string.format("{%s}%s", "\\i1", text):gsub("}{", "")
+                        end
+
+                        line.Layer = 0
+                        line.Style = v.style
+                        line.Text  = text
                     end
 
-                    if text ~= "" then table.insert(lines, newLine) end
+                    ::continue::
+
+                    if not deleteThis then table.insert(lines, line:raw()) end
+
+                    prevStyle = line.Style
                 end
             end
 
@@ -473,7 +534,7 @@ local mergeStart
 
 local function tryMerge()
 
-    local ok = mergeSubtitles()
+    local ok, err = pcall(mergeSubtitles)
 
     if ok then
 
@@ -486,7 +547,11 @@ local function tryMerge()
         this.merged   = this.subtitles[mp.get_property_number("sid")]
         local elapsed = mp.get_time() - mergeStart
 
-        h.notify(string.format("Subtitles is merged. Took %d seconds.", elapsed), "mergesubtitles", "info", 30)
+        h.notify(string.format("Subtitles merged. Took %d seconds.", elapsed), "mergesubtitles", "info", 30)
+    else
+
+        h.notify(err, "mergesubtitles", "error")
+        h.notify("See the console for details.", "mergesubtitles", "error")
     end
 end
 
@@ -503,7 +568,7 @@ function this.deleteMerged()
     return true
 end
 
-local function mergeProcess()
+function this.merge()
 
     if not (this.bottom and this.top) then
 
@@ -622,17 +687,6 @@ local function mergeProcess()
     h.runAsync(ffmpegCommand, tryMerge, onSubtitleFail)
 
     return true
-end
-
-function this.merge()
-
-    local ok, err = pcall(mergeProcess)
-
-    if not ok then
-
-        h.notify(err, "mergesubtitles", "error")
-        h.notify("See the console for details.", "mergesubtitles", "error")
-    end
 end
 
 function this.getPath(key)
