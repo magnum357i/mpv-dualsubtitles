@@ -35,7 +35,7 @@ end
 local function detectSubtitleInfo(trackInfo)
 
     local externalSubtitle = utils.file_info(trackInfo["external-filename"])
-    local lang             = trackInfo.title and trackInfo.title:match("[%.%-%s]?([a-zA-Z][a-zA-Z][a-zA-Z]?)%.[a-z][a-z][a-z]$") or nil
+    local lang             = trackInfo.title and string.match("."..trackInfo.title, "[%.%-%s]([a-zA-Z][a-zA-Z][a-zA-Z]?)%.[a-z][a-z][a-z]$") or nil
     local bytes            = externalSubtitle and externalSubtitle.size or 0
 
     return lang, bytes

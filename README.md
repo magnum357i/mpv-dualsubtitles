@@ -53,6 +53,7 @@ Dual subtitles plugin for mpv.
 | <kbd>Ctrl+E</kbd>   | move secondary subtitle up                |
 | <kbd>Ctrl+b</kbd>   | merge subtitles into a single file        |
 | <kbd>Ctrl+B</kbd>   | delete the merged file                    |
+| <kbd>Ctrl+C</kbd>   | copy subtitles to clipboard               |
 
 # How Does Auto Selection Work?
 - Find subtitles based on the preferred languages.
@@ -163,3 +164,6 @@ expand_subtitle_search=yes
 Merging subtitles allows you to have more styling options.
 
 ![Example for Merging Subtitles](https://github.com/magnum357i/mpv-dualsubtitles/blob/main/mpv-shot0002.jpg)
+
+# Copy Subtitles
+Hold the shortcut key to copy the on-screen subtitles to the clipboard. Works with merged subtitles as well.

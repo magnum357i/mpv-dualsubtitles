@@ -4,7 +4,7 @@ https://github.com/magnum357i/mpv-dualsubtitles/
 
 ╔════════════════════════════════╗
 ║        MPV dualsubtitles       ║
-║              v2.2.3            ║
+║              v2.2.4            ║
 ╚════════════════════════════════╝
 
 ## Required ##
@@ -50,12 +50,18 @@ local config   = {
 
 
     --external subtitles
-    expand_subtitle_search = false
+    expand_subtitle_search = false,
+
+
+    --copy
+    copy_format            = "(%s) %s"
 }
 
 options.read_options(config, "dualsubtitles")
 
 local hideMode = 0
+local cSubs
+local timer
 
 subtitle.init(config)
 
@@ -157,6 +163,106 @@ local function hideSubtitles()
     end
 end
 
+local function copySubtitlesOnPress()
+
+    cSubs = {bottom = {}, top = {}}
+
+    mp.set_property_bool("pause", false)
+    mp.osd_message("▶ Collecting subtitles...", 9999)
+
+    local merged      = subtitle.loadMerged()
+    local parseMerged = function (text)
+
+        local text1 = ""
+
+        for line in text:gmatch("%{%*P[^%}]*%}([^\n]+)") do
+
+            text1 = text1..line:gsub("%s*\\N%s*", " ").." "
+        end
+
+        local text2 = ""
+
+        for line in text:gmatch("%{%*S[^%}]*%}([^\n]+)") do
+
+            text2 = text2..line:gsub("%s*\\N%s*", " ").." "
+        end
+
+        text1 = text1:gsub("%s+$", "")
+        text2 = text2:gsub("%s+$", "")
+
+        return text1, text2
+    end
+
+    timer = mp.add_periodic_timer(0.1, function()
+
+        local bottomText, topText
+
+        if merged then
+
+            bottomText, topText = parseMerged(mp.get_property("sub-text/ass"))
+        else
+
+            bottomText = mp.get_property("sub-text")
+            topText    = mp.get_property("secondary-sub-text")
+        end
+
+        if bottomText ~= "" then
+
+            if #cSubs.bottom == 0 or cSubs.bottom[#cSubs.bottom] ~= bottomText then
+
+                table.insert(cSubs.bottom, bottomText)
+            end
+        end
+
+        if topText ~= "" then
+
+            if #cSubs.top == 0 or cSubs.top[#cSubs.top] ~= topText then
+
+                table.insert(cSubs.top, topText)
+            end
+        end
+    end)
+end
+
+local function copySubtitlesOnUp()
+
+    if timer then timer:kill() timer = nil end
+
+    mp.set_property_bool("pause", true)
+    mp.osd_message("", 0)
+
+    if #cSubs.bottom > 0 and #cSubs.top > 0 then
+
+        subtitle.loadDefaults()
+
+        local sanitize = function (text)
+
+            text = text:gsub("\n", " ")
+            text = text:gsub("%s+", " ")
+
+            return text
+        end
+
+        for i, v in ipairs(cSubs.bottom) do cSubs.bottom[i] = sanitize(v) end
+        for i, v in ipairs(cSubs.top)    do cSubs.top[i]    = sanitize(v) end
+
+        local result = string.format(config.copy_format.."\n"..config.copy_format, (subtitle.top and subtitle.top.lang or "S"), table.concat(cSubs.top, " "), (subtitle.bottom and subtitle.bottom.lang or "P"), table.concat(cSubs.bottom, " "))
+
+        if subtitle.isWindows then
+
+            h.runCommand({"powershell", "-NoProfile", "-Command", 'Set-Clipboard -Value @"\n'..result..'\n"@'})
+        else
+
+            h.runCommand({"xclip", "-selection", "clipboard", '<<EOF\n'..result..'\nEOF\n'})
+        end
+
+        mp.osd_message("⏸ Stopped. Subtitles copied.", 10)
+    else
+
+        h.notify("Two subtitles must appear on screen.", "copysubtitles", "error")
+    end
+end
+
 local function updateSubtitleList(_, tracks)
 
     subtitle.updateList(#tracks)
@@ -195,6 +301,16 @@ mp.add_key_binding("v",      "hidesubtitles",    hideSubtitles)
 mp.add_key_binding("u",      "reversesubtitles", reverseSubtitles)
 mp.add_key_binding("Ctrl+b", "mergesubtitles",   mergeSubtitles)
 mp.add_key_binding("Ctrl+B", "deletemergedfile", deleteMergedFile)
+mp.add_key_binding("Ctrl+C", "copysubtitles", function(state)
+
+    if state.event == "down" then
+
+        copySubtitlesOnPress()
+    elseif state.event == "up" then
+
+        copySubtitlesOnUp()
+    end
+end, {complex=true})
 
 mp.observe_property("track-list", "native", updateSubtitleList)
 

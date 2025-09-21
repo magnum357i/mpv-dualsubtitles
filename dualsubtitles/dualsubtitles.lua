@@ -37,7 +37,7 @@ local function filterSubtitle(subtitle,wordstofilter)
 
     local stitle = subtitle.title and subtitle.title:lower() or nil
 
-    if subtitle.forced and not subtitle.default     then return false end
+    if subtitle.forced and not subtitle.default          then return false end
     if stitle and h.searchStrings(stitle, wordstofilter) then return false end
 
     return true
@@ -461,6 +461,9 @@ local function mergeSubtitles()
 
                             text = string.format("{%s}%s", "\\i1", text):gsub("}{", "")
                         end
+
+                        --for copy
+                        text = string.format("{*%s}%s", v.style:sub(1,1), text):gsub("}{", "")
 
                         line.Layer = 0
                         line.Style = v.style
