@@ -3,44 +3,40 @@ Dual subtitles plugin for mpv.
 
 ![Example for Dual Subtitles](https://github.com/magnum357i/mpv-dualsubtitles/blob/main/mpv-shot0001.jpg)
 
+# Dependencies
+
+- FFmpeg (for merging)
+
 # Installation
 
-1. Install FFmpeg.
+If FFmpeg is already installed on your system, just move the **dualsubtitles** folder to your scripts directory. To install via command line:
 
-    #### Windows (Powershell)
+### Windows (Powershell)
 
-    ```
-    New-Item -ItemType Directory -Path "C:\FFmpeg"; Set-Location "C:\FFmpeg"
-    Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-git-full.7z" -OutFile "FFmpeg.7z"
-    tar -xf FFmpeg.7z
-    Get-ChildItem -Directory "*build" | ForEach-Object { Move-Item "$_\bin" . }
-    Remove-Item "ffmpeg*" -Recurse -Force
-    [Environment]::SetEnvironmentVariable("Path", ([Environment]::GetEnvironmentVariable("Path","Machine") + ";C:\FFmpeg\bin"), "Machine")
-    ```
+```
+# FFmpeg
+New-Item -ItemType Directory -Path "C:\FFmpeg"; Set-Location "C:\FFmpeg"
+curl -L "https://www.gyan.dev/ffmpeg/builds/ffmpeg-git-full.7z" -o "FFmpeg.7z"
+tar -xf FFmpeg.7z
+Get-ChildItem -Directory "*build" | ForEach-Object { Move-Item "$_\bin" . }
+Remove-Item "ffmpeg*" -Recurse -Force
+[Environment]::SetEnvironmentVariable("Path", ([Environment]::GetEnvironmentVariable("Path","User") + ";C:\FFmpeg\bin"), "User")
+# Plugin
+git clone --depth 1 https://github.com/magnum357i/mpv-dualsubtitles "$env:TEMP\gitmpvdualsubtitles"
+Copy-Item -Path "$env:TEMP\gitmpvdualsubtitles\dualsubtitles" -Destination "$env:APPDATA\mpv\scripts" -Recurse -Force
+```
 
-    *Please run as administrator.*
+*Please run as administrator.*
 
-    #### Linux
+### Linux
 
-    ```
-    pacman -S ffmpeg
-    ```
-
-2. Download the files and copy them to your mpv scripts folder.
-
-    #### Windows (CMD)
-
-    ```
-    git clone --depth 1 https://github.com/magnum357i/mpv-dualsubtitles "%TEMP%\gitmpvdualsubtitles"
-    xcopy /E /I /Y "%TEMP%\gitmpvdualsubtitles\dualsubtitles" "%APPDATA%\mpv\scripts\dualsubtitles"
-    ```
-
-    #### Linux
-
-    ```
-    git clone --depth 1 https://github.com/magnum357i/mpv-dualsubtitles /tmp/gitmpvdualsubtitles
-    mkdir -p ~/.config/mpv/scripts && cp -r /tmp/gitmpvdualsubtitles/dualsubtitles ~/.config/mpv/scripts/
-    ```
+```
+# FFmpeg
+pacman -S ffmpeg
+# Plugin
+git clone --depth 1 https://github.com/magnum357i/mpv-dualsubtitles /tmp/gitmpvdualsubtitles
+mkdir -p ~/.config/mpv/scripts && cp -r /tmp/gitmpvdualsubtitles/dualsubtitles ~/.config/mpv/scripts/
+```
 
 # Key Bindings
 | shortcut            | description                               |
@@ -55,7 +51,7 @@ Dual subtitles plugin for mpv.
 | <kbd>Ctrl+B</kbd>   | delete the merged file                    |
 | <kbd>Ctrl+C</kbd>   | copy subtitles to clipboard               |
 
-# How Does Auto Selection Work?
+# How Does Auto-Selection Work?
 - Find subtitles based on the preferred languages.
 - Skip forced and ignored subtitles.
 - Sort subtitles by size.
