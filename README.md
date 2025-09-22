@@ -15,7 +15,7 @@ Dual subtitles plugin for mpv.
     tar -xf FFmpeg.7z
     Get-ChildItem -Directory "*build" | ForEach-Object { Move-Item "$_\bin" . }
     Remove-Item "ffmpeg*" -Recurse -Force
-    [Environment]::SetEnvironmentVariable("Path", ([Environment]::GetEnvironmentVariable("Path","User") + ";C:\FFmpeg\bin"), "User")
+    [Environment]::SetEnvironmentVariable("Path", ([Environment]::GetEnvironmentVariable("Path","Machine") + ";C:\FFmpeg\bin"), "Machine")
     ```
 
     *Please run as administrator.*

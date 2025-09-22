@@ -692,6 +692,13 @@ function this.merge()
     return true
 end
 
+function this.isMergedSelected()
+
+    local currentSid = mp.get_property_number("sid", 0)
+
+    return (this.merged and currentSid == this.merged.id)
+end
+
 function this.getPath(key)
 
     this.hash = this.hash or h.hash(mp.get_property("path"))
@@ -792,8 +799,34 @@ end
 
 function this.toggle(bottom, top)
 
-    mp.set_property_native("sub-visibility",           (bottom == 1) and "yes" or "no")
-    mp.set_property_native("secondary-sub-visibility", (top == 1)    and "yes" or "no")
+    if this.isMergedSelected() then
+
+        local overrides     = mp.get_property("sub-ass-style-overrides")
+        local hidePrimary   = "Primary.AlphaLevel=255"
+        local hideSecondary = "Secondary.AlphaLevel=255"
+
+        if bottom == 1 then
+
+            overrides = overrides:gsub(",?"..hidePrimary:gsub("%.", "%%."), "")
+        else
+
+            overrides = (overrides == "") and hidePrimary or overrides..","..hidePrimary
+        end
+
+        if top == 1 then
+
+            overrides = overrides:gsub(",?"..hideSecondary:gsub("%.", "%%."), "")
+        else
+
+            overrides = (overrides == "") and hideSecondary or overrides..","..hideSecondary
+        end
+
+        mp.set_property("sub-ass-style-overrides", overrides)
+    else
+
+        mp.set_property_native("sub-visibility",           (bottom == 1) and "yes" or "no")
+        mp.set_property_native("secondary-sub-visibility", (top == 1)    and "yes" or "no")
+    end
 end
 
 function this.set(bottomSid, topSid)

@@ -4,7 +4,7 @@ https://github.com/magnum357i/mpv-dualsubtitles/
 
 ╔════════════════════════════════╗
 ║        MPV dualsubtitles       ║
-║              v2.2.4            ║
+║              v2.2.5            ║
 ╚════════════════════════════════╝
 
 ## Required ##
@@ -16,6 +16,7 @@ Countries (ISO 3166): https://en.wikipedia.org/wiki/List_of_ISO_3166_country_cod
 
 ## Language Reference ##
 CSV Data: https://github.com/datasets/language-codes/blob/main/data/language-codes-3b2.csv
+
 ]]
 
 local mp       = require "mp"
@@ -170,7 +171,8 @@ local function copySubtitlesOnPress()
     mp.set_property_bool("pause", false)
     mp.osd_message("▶ Collecting subtitles...", 9999)
 
-    local merged      = subtitle.loadMerged()
+    local merged = subtitle.isMergedSelected()
+
     local parseMerged = function (text)
 
         local text1 = ""
@@ -193,17 +195,20 @@ local function copySubtitlesOnPress()
         return text1, text2
     end
 
+    local visible1 = mp.get_property_bool("sub-visibility")
+    local visible2 = mp.get_property_bool("secondary-sub-visibility")
+
     timer = mp.add_periodic_timer(0.1, function()
 
         local bottomText, topText
 
-        if merged then
+        if merged and visible1 then
 
             bottomText, topText = parseMerged(mp.get_property("sub-text/ass"))
         else
 
-            bottomText = mp.get_property("sub-text")
-            topText    = mp.get_property("secondary-sub-text")
+            bottomText = visible1 and mp.get_property("sub-text")           or ""
+            topText    = visible2 and mp.get_property("secondary-sub-text") or ""
         end
 
         if bottomText ~= "" then
@@ -231,7 +236,7 @@ local function copySubtitlesOnUp()
     mp.set_property_bool("pause", true)
     mp.osd_message("", 0)
 
-    if #cSubs.bottom > 0 and #cSubs.top > 0 then
+    if #cSubs.bottom > 0 or #cSubs.top > 0 then
 
         subtitle.loadDefaults()
 
@@ -246,7 +251,15 @@ local function copySubtitlesOnUp()
         for i, v in ipairs(cSubs.bottom) do cSubs.bottom[i] = sanitize(v) end
         for i, v in ipairs(cSubs.top)    do cSubs.top[i]    = sanitize(v) end
 
-        local result = string.format(config.copy_format.."\n"..config.copy_format, (subtitle.top and subtitle.top.lang or "S"), table.concat(cSubs.top, " "), (subtitle.bottom and subtitle.bottom.lang or "P"), table.concat(cSubs.bottom, " "))
+        local result
+
+        if #cSubs.bottom > 0 and #cSubs.top > 0 then
+
+            result = string.format(config.copy_format.."\n"..config.copy_format, (subtitle.top and subtitle.top.lang or "S"), table.concat(cSubs.top, " "), (subtitle.bottom and subtitle.bottom.lang or "P"), table.concat(cSubs.bottom, " "))
+        else
+
+            result = #cSubs.top > 0 and table.concat(cSubs.top, " ") or table.concat(cSubs.bottom, " ")
+        end
 
         if subtitle.isWindows then
 
@@ -256,10 +269,10 @@ local function copySubtitlesOnUp()
             h.runCommand({"xclip", "-selection", "clipboard", '<<EOF\n'..result..'\nEOF\n'})
         end
 
-        mp.osd_message("⏸ Stopped. Subtitles copied.", 10)
+        mp.osd_message("⏸ Stopped. Subtitles copied.", 3)
     else
 
-        h.notify("Two subtitles must appear on screen.", "copysubtitles", "error")
+        h.notify("No subtitles on screen.", "copysubtitles", "error")
     end
 end
 
@@ -336,7 +349,9 @@ if config.secondary_on_hover then
 
     mp.observe_property("mouse-pos", "native", function(_, mouse)
 
-        if not mp.get_property_number("secondary-sid", 0) then return end
+        local merged       = subtitle.isMergedSelected()
+
+        if not merged and mp.get_property_number("secondary-sid", 0) == 0 then return end
 
         local windowHeight = mp.get_property_number("osd-height")
         local hoverArea    = (windowHeight * config.hover_height_percent) / 100
