@@ -163,3 +163,6 @@ Merging subtitles allows you to have more styling options.
 
 # Copy Subtitles
 Hold the shortcut key to copy the on-screen subtitles to the clipboard. Works with merged subtitles as well.
+
+# Related Plugins
+- [sidebarsubtitles](https://github.com/magnum357i/mpv-sidebarsubtitles)
