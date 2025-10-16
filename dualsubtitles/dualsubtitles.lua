@@ -419,15 +419,13 @@ local function mergeSubtitles()
                             if seen[sKey] and seen[sKey] == text then
 
                                 deleteThis = true
-
-                                goto continue
                             else
 
                                 seen[sKey] = text
                             end
                         end
 
-                        if this.config.detect_italics then
+                        if not deleteThis and this.config.detect_italics then
 
                             if prevStyle ~= line.Style and h.hasItem(italicStyles, line.Style) then
 
@@ -440,24 +438,22 @@ local function mergeSubtitles()
                             makeItalic = makeItalic or hasItalic(line.Text)
                         end
 
-                        if this.config.remove_sdh_entries then
+                        if not deleteThis and this.config.remove_sdh_entries then
 
                             text = sdhKiller(text)
 
                             if text == "" then
 
                                 deleteThis = true
-
-                                goto continue
                             end
                         end
 
-                        if this.config[v.subType.."_tags"] ~= "" then
+                        if not deleteThis and this.config[v.subType.."_tags"] ~= "" then
 
                             text = string.format("{%s}%s", this.config[v.subType.."_tags"], text)
                         end
 
-                        if makeItalic then
+                        if not deleteThis and makeItalic then
 
                             text = string.format("{%s}%s", "\\i1", text):gsub("}{", "")
                         end
@@ -469,8 +465,6 @@ local function mergeSubtitles()
                         line.Style = v.style
                         line.Text  = text
                     end
-
-                    ::continue::
 
                     if not deleteThis then table.insert(lines, line:raw()) end
 
