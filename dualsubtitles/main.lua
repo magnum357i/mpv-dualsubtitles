@@ -66,6 +66,41 @@ local timer
 
 subtitle.init(config)
 
+--from MPV
+local function detectPlatform()
+
+    local platform = mp.get_property_native("platform")
+
+    if platform == "darwin" or platform == "windows" then
+
+        return platform
+    elseif os.getenv("WAYLAND_DISPLAY") or os.getenv("WAYLAND_SOCKET") then
+
+        return "wayland"
+    end
+
+    return "x11"
+end
+
+local function setClipboard(str)
+
+    local platform = detectPlatform()
+
+    if platform == "windows" then
+
+        h.runCommand({"powershell", "-NoProfile", "-Command", 'Set-Clipboard -Value @"\n'..str..'\n"@'})
+    elseif platform == "darwin" then
+
+        h.runCommand({"sh", "-c", "pbcopy <<'EOF'\n"..str.."\nEOF"})
+    elseif platform == "wayland" then
+
+        h.runCommand({"sh", "-c", "wl-copy <<'EOF'\n"..str.."\nEOF"})
+    elseif platform == "x11" then
+
+        h.runCommand({"sh", "-c", "xclip -selection clipboard <<'EOF'\n"..str.."\nEOF"})
+    end
+end
+
 local function setSubtitles()
 
     local ok
@@ -261,15 +296,9 @@ local function copySubtitlesOnUp()
             result = #cSubs.top > 0 and table.concat(cSubs.top, " ") or table.concat(cSubs.bottom, " ")
         end
 
-        if subtitle.isWindows then
-
-            h.runCommand({"powershell", "-NoProfile", "-Command", 'Set-Clipboard -Value @"\n'..result..'\n"@'})
-        else
-
-            h.runCommand({"xclip", "-selection", "clipboard", '<<EOF\n'..result..'\nEOF\n'})
-        end
-
         mp.osd_message("⏸ Stopped. Subtitles copied.", 3)
+
+        setClipboard(result)
     else
 
         h.notify("No subtitles on screen.", "copysubtitles", "error")

@@ -45,8 +45,8 @@ mkdir -p ~/.config/mpv/scripts && cp -r /tmp/gitmpvdualsubtitles/dualsubtitles ~
 | <kbd>K</kbd>        | switch secondary subtitle track backwards |
 | <kbd>u</kbd>        | reverse subtitles                         |
 | <kbd>v</kbd>        | cycle through subtitle visibility modes   |
-| <kbd>Ctrl+e</kbd>   | move secondary subtitle down              |
-| <kbd>Ctrl+E</kbd>   | move secondary subtitle up                |
+| <kbd>Ctrl+r</kbd>   | move secondary subtitle down              |
+| <kbd>Ctrl+R</kbd>   | move secondary subtitle up                |
 | <kbd>Ctrl+b</kbd>   | merge subtitles into a single file        |
 | <kbd>Ctrl+B</kbd>   | delete the merged file                    |
 | <kbd>Ctrl+C</kbd>   | copy subtitles to clipboard               |
