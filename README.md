@@ -43,7 +43,7 @@ mkdir -p ~/.config/mpv/scripts && cp -r /tmp/gitmpvdualsubtitles/dualsubtitles ~
 | ------------------- | ----------------------------------------- |
 | <kbd>k</kbd>        | switch secondary subtitle track           |
 | <kbd>K</kbd>        | switch secondary subtitle track backwards |
-| <kbd>u</kbd>        | reverse subtitles                         |
+| <kbd>u</kbd>        | swap subtitles                            |
 | <kbd>v</kbd>        | cycle through subtitle visibility modes   |
 | <kbd>Ctrl+r</kbd>   | move secondary subtitle down              |
 | <kbd>Ctrl+R</kbd>   | move secondary subtitle up                |
@@ -52,11 +52,13 @@ mkdir -p ~/.config/mpv/scripts && cp -r /tmp/gitmpvdualsubtitles/dualsubtitles ~
 | <kbd>Ctrl+C</kbd>   | copy subtitles to clipboard               |
 
 # How Does Auto-Selection Work?
-- Find subtitles based on the preferred languages.
-- Skip forced and ignored subtitles.
+- Get subtitles based on preferred languages. **[top_languages or bottom_languages]**
+- Skip forced and ignored subtitles. **[rejected_words]**
 - Sort subtitles by size.
-- Skip hearing-impaired subtitles.
-- Select the first subtitle. If none, use a hearing-impaired subtitle.
+- Remove non-preferred subtitles, if a match is found. **[preferred_words]**
+- Find first text-based subtitle that is not SDH. Exit if found.
+- Find first subtitle that is not SDH. Exit if found.
+- Get first subtitle. (It will likely be an SDH or image-based subtitle.)
 
 Forced subtitles are never selected when full subtitles are available, even if they are not properly marked. And hearing-impaired subtitles are better than no subtitle.
 
@@ -64,30 +66,37 @@ Forced subtitles are never selected when full subtitles are available, even if t
 Create a file named `dualsubtitles.conf` in the script-opts directory, and copy the content below into it. You can now modify the settings as desired.
 
 ```ini
-# Subtitles to be auto-selected at startup
+# Subtitles to be auto-selected at startup (The first one has the highest priority)
+#
+# Format: <langCode>-<countryCode>
+# Lang list: https://en.wikipedia.org/wiki/List_of_ISO_639_language_codes
+# Country list: https://en.wikipedia.org/wiki/List_of_ISO_3166_country_codes
 top_languages=tr-tr
 bottom_languages=en-us,ja-jp
 
-# Exclude subtitles with these words in their title
-ignored_words=sign,song
+# Use only the matching ones, if any subtitles contain these words
+preferred_words=full
+
+# Always skip subtitles if their title contains these words
+rejected_words=sign,song
 
 # Set top subtitle as bottom subtitle if bottom subtitle is missing
 use_top_as_bottom=yes
 
-# Show secondary subtitle while hovering
+# Display secondary subtitle on hover
 secondary_on_hover=no
 
 # Secondary subtitle hover area (50 = the top half of the screen)
 hover_height_percent=50
 
-# Style settings for the merged subtitle
-# In MPV, styling options for the secondary subtitle are very limited.
-# By merging the subtitles, you can work around this limitation. If your video file is on an HDD, this process may take 2–3 minutes.
+# Style settings for merged subtitles
+# In MPV, styling options for secondary subtitles are quite limited. By merging subtitles, you can work around this limitation. If your video file is on an HDD, this process may take 2–3 minutes.
 top_style=fn:Arial,fs:70,1c:&H0000DEFF,2c:&H000000FF,3c:&H00000000,4c:&H00000000,b:0,i:0,u:0,s:0,sx:100,sy:100,fsp:0,frz:0,bs:1,bord:3,shad:0,an:8,ml:0,mr:0,mv:40,enc:1
 bottom_style=fn:Arial,fs:70,1c:&H00FFFFFF,2c:&H000000FF,3c:&H00000000,4c:&H00000000,b:0,i:0,u:0,s:0,sx:100,sy:100,fsp:0,frz:0,bs:1,bord:3,shad:0,an:2,ml:0,mr:0,mv:40,enc:1
 
-# ASS tags for the merged subtitle
+# ASS tags for merged subtitles
 # When a line is stripped based on your current settings, these tags will be added to it.
+# ASS Tags Page (official): https://aegisub.org/docs/latest/ass_tags/
 top_tags=
 bottom_tags=\blur4
 
@@ -100,15 +109,16 @@ keep_ts=none
 # Don’t expect perfect results. If you have a SDH subtitle, and the cues are very distracting, you might want to try this setting.
 remove_sdh_entries=no
 
-# Loads subtitles from subfolders with the same name as the video file
-# Useful for series
+# Enable extended search for external subtitles
+# Loads subtitles from subfolders with the same name as the video file. Useful for series.
+# Do not enable this setting if you are using something similar.
 expand_subtitle_search=no
 
-# Italic lines in the source subtitle remain italic after merge.
+# Keep italics during merging
 detect_italics=yes
 
 # Prevents you from seeing the same text 20 times on the screen.
-remove_repeating_lines=none
+remove_repeating_lines=no
 ```
 
 # External Subtitles

@@ -4,7 +4,7 @@ https://github.com/magnum357i/mpv-dualsubtitles/
 
 ╔════════════════════════════════╗
 ║        MPV dualsubtitles       ║
-║              v2.2.5            ║
+║              v2.3.0            ║
 ╚════════════════════════════════╝
 
 ## Required ##
@@ -24,82 +24,42 @@ local options  = require "mp.options"
 local h        = require "helpers"
 local subtitle = require "dualsubtitles"
 
-local config   = {
+config = {
 
     --auto select
-    top_languages          = "tr-tr",
-    bottom_languages       = "en-us,ja-jp",
-    ignored_words          = "sign,song",
-    use_top_as_bottom      = true,
+    top_languages            = "tr-tr",
+    bottom_languages         = "en-us,ja-jp",
+    preferred_words          = "full",
+    rejected_words           = "sign,song",
+    use_top_as_bottom        = true,
 
 
     --hover for secondary
-    secondary_on_hover     = false,
-    hover_height_percent   = 50,
+    secondary_on_hover       = false,
+    hover_height_percent     = 50,
 
 
     --merged subtitle
-    top_style              = "fn:Segoe UI Semibold,fs:70,1c:&H0000DEFF,2c:&H000000FF,3c:&H00000000,4c:&H00000000,b:0,i:0,u:0,s:0,sx:100,sy:100,fsp:0,frz:0,bs:1,bord:4,shad:0,an:8,ml:0,mr:0,mv:40,enc:1",
-    bottom_style           = "fn:Calibri,fs:70,1c:&H00FFFFFF,2c:&H000000FF,3c:&H00000000,4c:&H00000000,b:0,i:0,u:0,s:0,sx:100,sy:100,fsp:0,frz:0,bs:1,bord:1.5,shad:0,an:2,ml:0,mr:0,mv:40,enc:1",
-    top_tags               = "",
-    bottom_tags            = "\\blur4",
+    top_style                = "fn:Segoe UI Semibold,fs:70,1c:&H0000DEFF,2c:&H000000FF,3c:&H00000000,4c:&H00000000,b:0,i:0,u:0,s:0,sx:100,sy:100,fsp:0,frz:0,bs:1,bord:4,shad:0,an:8,ml:0,mr:0,mv:40,enc:1",
+    bottom_style             = "fn:Calibri,fs:70,1c:&H00FFFFFF,2c:&H000000FF,3c:&H00000000,4c:&H00000000,b:0,i:0,u:0,s:0,sx:100,sy:100,fsp:0,frz:0,bs:1,bord:1.5,shad:0,an:2,ml:0,mr:0,mv:40,enc:1",
+    top_tags                 = "",
+    bottom_tags              = "\\blur4",
 
-    detect_italics         = true,
-    keep_ts                = "none", --bottom, top, none
-    remove_sdh_entries     = false,
-    remove_repeating_lines = false,
+    detect_italics           = true,
+    keep_ts                  = "none", --bottom, top, none
+    remove_sdh_entries       = false,
+    remove_repeating_lines   = false,
 
-
-    --external subtitles
-    expand_subtitle_search = false,
-
-
-    --copy
-    copy_format            = "(%s) %s"
+    --misc
+    expand_subtitle_search   = false,
+    copy_format              = "(%s) %s"
 }
 
-options.read_options(config, "dualsubtitles")
+options.read_options(config)
 
 local hideMode = 0
 local cSubs
 local timer
-
-subtitle.init(config)
-
---from MPV
-local function detectPlatform()
-
-    local platform = mp.get_property_native("platform")
-
-    if platform == "darwin" or platform == "windows" then
-
-        return platform
-    elseif os.getenv("WAYLAND_DISPLAY") or os.getenv("WAYLAND_SOCKET") then
-
-        return "wayland"
-    end
-
-    return "x11"
-end
-
-local function setClipboard(str)
-
-    local platform = detectPlatform()
-
-    if platform == "windows" then
-
-        h.runCommand({"powershell", "-NoProfile", "-Command", 'Set-Clipboard -Value @"\n'..str..'\n"@'})
-    elseif platform == "darwin" then
-
-        h.runCommand({"sh", "-c", "pbcopy <<'EOF'\n"..str.."\nEOF"})
-    elseif platform == "wayland" then
-
-        h.runCommand({"sh", "-c", "wl-copy <<'EOF'\n"..str.."\nEOF"})
-    elseif platform == "x11" then
-
-        h.runCommand({"sh", "-c", "xclip -selection clipboard <<'EOF'\n"..str.."\nEOF"})
-    end
-end
 
 local function setSubtitles()
 
@@ -107,11 +67,11 @@ local function setSubtitles()
 
     ok = subtitle.loadMerged()
 
-    if ok then return false end
+    if ok then return end
 
     ok = subtitle.load()
 
-    if not ok then return false end
+    if not ok then return end
 
     if config.use_top_as_bottom and not subtitle.bottom and subtitle.top then
 
@@ -126,8 +86,6 @@ local function setSubtitles()
     subtitle.display()
 
     h.log(string.format("bottom %s, top %s", subtitle.bottom and subtitle.bottom.id or "not set", subtitle.top and subtitle.top.id or "not set"))
-
-    return true
 end
 
 local function deleteMergedFile()
@@ -151,7 +109,35 @@ local function mergeSubtitles()
     subtitle.merge()
 end
 
-local function reverseSubtitles()
+local function swapSubtitles()
+
+    if subtitle.isMergedSelected() then
+
+        local overrideMode = mp.get_property("sub-ass-override", "")
+
+        if not (overrideMode == "yes" or overrideMode == "scale") then h.notify("Style override functionality only works with \"--sub-ass-override=yes\" or \"--sub-ass-override=scale\".", "styleoverride", "warn", nil, true) end
+
+        local overrides  = mp.get_property("sub-ass-style-overrides", "")
+        local alignments = {
+
+            ["2"] = "2",
+            ["8"] = "6"
+        }
+
+        if not string.find(overrides, "Primary.Alignment=", 1, true) then
+
+            overrides = subtitle.addStyleOverride(overrides, "Primary",   "Alignment", alignments["8"])
+            overrides = subtitle.addStyleOverride(overrides, "Secondary", "Alignment", alignments["2"])
+        else
+
+            overrides = subtitle.addStyleOverride(overrides, "Primary",   "Alignment", nil)
+            overrides = subtitle.addStyleOverride(overrides, "Secondary", "Alignment", nil)
+        end
+
+        mp.set_property("sub-ass-style-overrides", overrides)
+
+        return
+    end
 
     subtitle.loadDefaults()
 
@@ -169,7 +155,7 @@ local function reverseSubtitles()
         mp.osd_message(string.format("Top: %s\nBottom: %s", tostring(subtitle.top), tostring(subtitle.bottom)))
     else
 
-        mp.osd_message("Subtitles not reversed")
+        mp.osd_message("Subtitles not swapped")
     end
 end
 
@@ -242,8 +228,8 @@ local function copySubtitlesOnPress()
             bottomText, topText = parseMerged(mp.get_property("sub-text/ass"))
         else
 
-            bottomText = visible1 and mp.get_property("sub-text")           or ""
-            topText    = visible2 and mp.get_property("secondary-sub-text") or ""
+            bottomText = visible1 and mp.get_property("sub-text", "")           or ""
+            topText    = visible2 and mp.get_property("secondary-sub-text", "") or ""
         end
 
         if bottomText ~= "" then
@@ -298,7 +284,7 @@ local function copySubtitlesOnUp()
 
         mp.osd_message("⏸ Stopped. Subtitles copied.", 3)
 
-        setClipboard(result)
+        h.setClipboard(result)
     else
 
         h.notify("No subtitles on screen.", "copysubtitles", "error")
@@ -334,16 +320,16 @@ end
 
 mp.register_event("file-loaded", setSubtitles)
 
-mp.add_key_binding("k",      "secondaryforward",          function() cycleSecondary(1) end)
-mp.add_key_binding("K",      "secondarybackward",         function() cycleSecondary(2) end)
-mp.add_key_binding("Ctrl+r", "increasesecondaryposition", function() cycleSecondaryPosition(1) end, {repeatable = true})
-mp.add_key_binding("Ctrl+R", "decreasesecondaryposition", function() cycleSecondaryPosition(2) end, {repeatable = true})
+mp.add_key_binding("k",      "dualsubtitles_secondaryforward",     function() cycleSecondary(1) end)
+mp.add_key_binding("K",      "dualsubtitles_secondarybackward",    function() cycleSecondary(2) end)
+mp.add_key_binding("Ctrl+r", "dualsubtitles_increasesecondarypos", function() cycleSecondaryPosition(1) end, {repeatable = true})
+mp.add_key_binding("Ctrl+R", "dualsubtitles_decreasesecondarypos", function() cycleSecondaryPosition(2) end, {repeatable = true})
 
-mp.add_key_binding("v",      "hidesubtitles",    hideSubtitles)
-mp.add_key_binding("u",      "reversesubtitles", reverseSubtitles)
-mp.add_key_binding("Ctrl+b", "mergesubtitles",   mergeSubtitles)
-mp.add_key_binding("Ctrl+B", "deletemergedfile", deleteMergedFile)
-mp.add_key_binding("Ctrl+C", "copysubtitles", function(state)
+mp.add_key_binding("v",      "dualsubtitles_hide",         hideSubtitles)
+mp.add_key_binding("u",      "dualsubtitles_swap",         swapSubtitles)
+mp.add_key_binding("Ctrl+b", "dualsubtitles_merge",        mergeSubtitles)
+mp.add_key_binding("Ctrl+B", "dualsubtitles_deletemerged", deleteMergedFile)
+mp.add_key_binding("Ctrl+C", "dualsubtitles_copy", function(state)
 
     if state.event == "down" then
 
@@ -378,9 +364,7 @@ if config.secondary_on_hover then
 
     mp.observe_property("mouse-pos", "native", function(_, mouse)
 
-        local merged       = subtitle.isMergedSelected()
-
-        if not merged and mp.get_property_number("secondary-sid", 0) == 0 then return end
+        if mp.get_property_number("sid", 0) == 0 or not subtitle.isMergedSelected() and mp.get_property_number("secondary-sid", 0) == 0 then return end
 
         local windowHeight = mp.get_property_number("osd-height")
         local hoverArea    = (windowHeight * config.hover_height_percent) / 100

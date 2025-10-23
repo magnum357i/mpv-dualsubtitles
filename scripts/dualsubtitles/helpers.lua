@@ -120,4 +120,45 @@ function this.hash(str)
     return string.format("%08x%08x%08x", h1, h2, h3)
 end
 
+--from MPV
+function this.detectPlatform()
+
+    local platform = mp.get_property_native("platform")
+
+    if platform == "darwin" or platform == "windows" then
+
+        return platform
+    elseif os.getenv("WAYLAND_DISPLAY") or os.getenv("WAYLAND_SOCKET") then
+
+        return "wayland"
+    end
+
+    return "x11"
+end
+
+function this.setClipboard(str)
+
+    local platform = this.detectPlatform()
+
+    if platform == "windows" then
+
+        this.runCommand({"powershell", "-NoProfile", "-Command", 'Set-Clipboard -Value @"\n'..str..'\n"@'})
+    elseif platform == "darwin" then
+
+        this.runCommand({"sh", "-c", "pbcopy <<'EOF'\n"..str.."\nEOF"})
+    elseif platform == "wayland" then
+
+        this.runCommand({"sh", "-c", "wl-copy <<'EOF'\n"..str.."\nEOF"})
+    elseif platform == "x11" then
+
+        this.runCommand({"sh", "-c", "xclip -selection clipboard <<'EOF'\n"..str.."\nEOF"})
+    end
+end
+
+--https://ssojet.com/escaping/regex-escaping-in-lua/
+function this.escape(str)
+
+    return str:gsub("[%.%+%-%*%?%^%$%(%)%[%]]", "%%%1")
+end
+
 return this

@@ -48,7 +48,7 @@ function subtitle:new(trackInfo)
     obj.id              = trackInfo.id
     obj.title           = trackInfo.title
     obj.ext             = getExt(trackInfo)
-    obj.textbased       = (obj.ext and obj.ext == ".srt" or obj.ext and obj.ext == ".ass")
+    obj.textbased       = obj.ext and (obj.ext == ".srt" or obj.ext == ".ass")
     obj.external        = trackInfo.external
     obj.lang            = trackInfo.lang
     obj.size            = trackInfo.metadata and trackInfo.metadata.NUMBER_OF_BYTES or 0

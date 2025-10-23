@@ -1,3 +1,5 @@
+--v1.1
+
 local ass = {}
 
 ass.__index = ass
@@ -34,29 +36,29 @@ function ass:new(rawLine)
 
        if not t[1] then return nil end
 
-       obj.Name           = t[1]
-       obj.Fontname       = t[2]
-       obj.Fontsize       = tonumber(t[3])
-       obj.PrimaryColor   = t[4]
-       obj.SecondaryColor = t[5]
-       obj.OutlineColor   = t[6]
-       obj.ShadowColor    = t[7]
-       obj.Bold           = t[8]  == "-1" and true or false
-       obj.Italic         = t[9]  == "-1" and true or false
-       obj.Underline      = t[10] == "-1" and true or false
-       obj.StrikeOut      = t[11] == "-1" and true or false
-       obj.ScaleX         = tonumber(t[12])
-       obj.ScaleY         = tonumber(t[13])
-       obj.Spacing        = tonumber(t[14])
-       obj.Angle          = tonumber(t[15])
-       obj.BorderStyle    = tonumber(t[16])
-       obj.Outline        = tonumber(t[17])
-       obj.Shadow         = tonumber(t[18])
-       obj.Alignment      = tonumber(t[19])
-       obj.MarginL        = tonumber(t[20])
-       obj.MarginR        = tonumber(t[21])
-       obj.MarginV        = tonumber(t[22])
-       obj.Encoding       = tonumber(t[23])
+       obj.Name            = t[1]
+       obj.Fontname        = t[2]
+       obj.Fontsize        = tonumber(t[3])
+       obj.PrimaryColour   = t[4]
+       obj.SecondaryColour = t[5]
+       obj.OutlineColour   = t[6]
+       obj.BackColour      = t[7]
+       obj.Bold            = t[8]  == "-1" and true or false
+       obj.Italic          = t[9]  == "-1" and true or false
+       obj.Underline       = t[10] == "-1" and true or false
+       obj.StrikeOut       = t[11] == "-1" and true or false
+       obj.ScaleX          = tonumber(t[12])
+       obj.ScaleY          = tonumber(t[13])
+       obj.Spacing         = tonumber(t[14])
+       obj.Angle           = tonumber(t[15])
+       obj.BorderStyle     = tonumber(t[16])
+       obj.Outline         = tonumber(t[17])
+       obj.Shadow          = tonumber(t[18])
+       obj.Alignment       = tonumber(t[19])
+       obj.MarginL         = tonumber(t[20])
+       obj.MarginR         = tonumber(t[21])
+       obj.MarginV         = tonumber(t[22])
+       obj.Encoding        = tonumber(t[23])
     end
 
     obj.Class = class
@@ -158,10 +160,10 @@ function ass:raw()
             self.Name,
             self.Fontname,
             self.Fontsize,
-            self.PrimaryColor,
-            self.SecondaryColor,
-            self.OutlineColor,
-            self.ShadowColor,
+            self.PrimaryColour,
+            self.SecondaryColour,
+            self.OutlineColour,
+            self.BackColour,
             (self.Bold      and -1 or 0),
             (self.Italic    and -1 or 0),
             (self.Underline and -1 or 0),

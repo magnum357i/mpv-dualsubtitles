@@ -5,40 +5,23 @@ local h         = require "helpers"
 local subtitle  = require "subtitle"
 local resampler = require "resampler"
 local assline   = require "assline"
+local path      = require "path"
 
 local this      = {
 
-    isWindows      = package.config:sub(1, 1) ~= '/',
-    seperator      = isWindows and "//" or "\\",
     subtitles      = {},
     prevTrackCount = 0,
-    config         = {},
     bottom         = nil,
     top            = nil,
     merged         = nil,
-    cacheDir       = "mpvdualsubtitles",
     hash           = nil,
-    paths          = {
-
-        temp   = os.getenv("TEMP") or os.getenv("TMPDIR") or "/tmp",
-        script = "~~/scripts/dualsubtitles",
-        config = "~~/script-opts"
-    },
-    files          = {
-
-        bottom   = "primary",
-        top      = "secondary",
-        merged   = "merged",
-        language = "cachedlanguages"
-    }
+    tempDir        = "mpvdualsubtitles"
 }
 
-local function filterSubtitle(subtitle,wordstofilter)
+local function filter(subtitle,wordsToFilter)
 
-    local stitle = subtitle.title and subtitle.title:lower() or nil
-
-    if subtitle.forced and not subtitle.default          then return false end
-    if stitle and h.searchStrings(stitle, wordstofilter) then return false end
+    if subtitle.forced                                                           then return false end
+    if subtitle.title and h.searchStrings(subtitle.title:lower(), wordsToFilter) then return false end
 
     return true
 end
@@ -117,199 +100,199 @@ local function getSubtitleList()
     return list
 end
 
-local function checkPath(path)
+local function mergeLanguages(configLangKey, map)
 
-    local ok = os.rename(path, path)
+    local preferredLanguages = h.splitString(config[configLangKey.."_languages"])
 
-    return ok
-end
+    if map == nil or next(map) == nil then
 
-local function removePath(path)
+        h.notify("You entered invalid languages, or the CSV file is broken.", "languagecache", "error")
 
-    local info = utils.file_info(path)
-
-    if not info then return false end
-
-    if info.is_file then
-
-        os.remove(path)
-    else
-
-        if this.isWindows then
-
-            h.runCommand({"powershell", "-NoProfile", "-Command", string.format("Remove-Item -Recurse -Force -LiteralPath \"%s\"", path)})
-        else
-
-            h.runCommand({"rm", "-rf", path})
-        end
+        return preferredLanguages
     end
 
-    return true
-end
+    local languageList = {}
 
-local function getSidByLanguage(languageCodes)
+    for _, value in ipairs(preferredLanguages) do
 
-    local selectedSubtitles = {}
-    local founded           = false
-    local unwantedSubtitles = h.splitString(this.config.ignored_words)
-    local missingMetadata   = false
+        local langCode, langCountry = value:match("([a-z][a-z])%-([a-z][a-z])")
 
-    for _, userLang in ipairs(languageCodes) do
+        if langCode and langCountry then
 
-        for _, subtitle in ipairs(this.subtitles) do
+            table.insert(languageList, value)
+            table.insert(languageList, langCode)
 
-            if subtitle.lang and subtitle.lang:lower() == userLang and filterSubtitle(subtitle, unwantedSubtitles) then
+            if map[langCode] then
 
-                founded = true
-                table.insert(selectedSubtitles, subtitle)
-
-                if subtitle.size == 0 and not missingMetadata then missingMetadata = true end
-            end
-        end
-
-        if founded then break end
-    end
-
-    if #selectedSubtitles > 1 and missingMetadata then h.notify("There are subtitles with missing metadata.", "findsubtitle", "warn") end
-
-    local subId = (#selectedSubtitles > 0) and selectedSubtitles[1].id or 0
-
-    if #selectedSubtitles > 1 then
-
-        table.sort(selectedSubtitles, function(a, b)
-
-            return tonumber(a.size) > tonumber(b.size)
-        end)
-
-        for _, subtitle in ipairs(selectedSubtitles) do
-
-            if not subtitle.hearingimpaired then
-
-                subId = subtitle.id
-                break
-            end
-        end
-    end
-
-    return subId
-end
-
-local function getLanguageMap(allLanguages)
-
-    local handle
-    local configFileInfo = utils.file_info(this.getPath("configfile"))
-    local cacheFileInfo  = utils.file_info(this.getPath("cache/languagefile"))
-
-    if not configFileInfo then configFileInfo = utils.file_info(this.getPath("scriptfile")) end
-    if configFileInfo and cacheFileInfo and tonumber(configFileInfo.mtime) > tonumber(cacheFileInfo.mtime) then removePath(this.getPath("cache/languagefile")) end
-
-    handle = io.open(this.getPath("cache/languagefile"), "r")
-
-    if handle then
-
-        local content = handle:read("*a")
-
-        handle:close()
-
-        return utils.parse_json(content)
-    end
-
-    local map = {}
-    handle    = io.open(this.getPath("csvfile"), "r")
-
-    if not handle then
-
-        h.notify("Language map file not found! A file named 'language-codes-3b2.csv' must be placed in the plugin directory.", "languagecache", "warn")
-    else
-
-        local isFilled = false
-        allLanguages   = h.splitString(allLanguages)
-        local langKeys = {}
-
-        for _, lang in ipairs(allLanguages) do
-
-            table.insert(langKeys, lang:find("-") and lang:gsub("%-.+","") or lang)
-        end
-
-        for line in handle:lines() do
-
-            local iso3, iso2, title = line:gsub('"', ''):gsub('[;,]?%s.+', ''):match("([^,]+),([^,]+),([^,]+)")
-
-            if title and h.hasItem(langKeys, iso2) then
-
-                map[iso2] = {iso3, title}
-
-                if not isFilled then isFilled = true end
-            end
-        end
-
-        handle:close()
-
-        if isFilled then
-
-            local tempPath = this.getPath("cache")
-
-            if not checkPath(tempPath) then
-
-                if this.isWindows then
-
-                    h.runCommand({"powershell", "-NoProfile", "-Command", "mkdir", tempPath})
-                else
-
-                    h.runCommand({"mkdir", "-p", tempPath})
-                end
-            end
-
-            handle = io.open(this.getPath("cache/languagefile"), "w")
-
-            if handle then
-
-                handle:write(utils.format_json(map))
-                handle:close()
+                table.insert(languageList, map[langCode][1])
+                table.insert(languageList, map[langCode][2])
             else
 
-                h.notify("Failed to create the cache file. Required for performance.", "languagecache", "error")
+                h.notify(string.format("This value isn’t in the map table: %s", value), "languagecache", "warn", nil, true)
             end
         else
 
-            h.notify("You entered invalid languages, or the CSV file is broken.", "languagecache", "error")
+            h.notify(string.format("Invalid language code: %s", value), "languagecache", "warn", nil, true)
+
+            table.insert(languageList, value)
+        end
+    end
+
+    h.log(configLangKey.."="..table.concat(languageList, ","))
+
+    return languageList
+end
+
+local function getLanguageMap()
+
+    local configFileInfo = utils.file_info(this.getPath("configfile")) or utils.file_info(this.getPath("scriptfile"))
+    local cacheFileInfo  = utils.file_info(this.getPath("cache/languagefile"))
+
+    if configFileInfo and cacheFileInfo and tonumber(configFileInfo.mtime) > tonumber(cacheFileInfo.mtime) then path.removeFile(this.getPath("cache/languagefile")) end
+
+    local mapContent = path.readFile(this.getPath("cache/languagefile"))
+
+    if mapContent then return utils.parse_json(mapContent) end
+
+    local csvContent = path.readFile(this.getPath("csvfile"))
+
+    if not csvContent then
+
+        h.notify("Language map file not found! A file named 'language-codes-3b2.csv' must be placed in the plugin directory.", "languagecache", "warn")
+
+        return {}
+    end
+
+    local allPreferredLanguages = h.splitString(config.bottom_languages..","..config.top_languages)
+    local map                   = {}
+    local langKeys              = {}
+
+    for _, lang in ipairs(allPreferredLanguages) do
+
+        table.insert(langKeys, lang:find("-", 1, true) and lang:gsub("%-.+","") or lang)
+    end
+
+    for iso3, iso2, title in string.gmatch(csvContent, '"([^"]*)","([^"]*)","([^"]*)"') do
+
+        if h.hasItem(langKeys, iso2) then
+
+            title     = title:gsub("[,;].+", "")
+            map[iso2] = {iso3, title}
+        end
+    end
+
+    if next(map) ~= nil then
+
+        path.createDir(this.getPath("cache"))
+
+        local isFileCreated = path.createFile(this.getPath("cache/languagefile"), utils.format_json(map))
+
+        if not isFileCreated then
+
+            h.notify("Failed to create the cache file. Required for performance.", "languagecache", "error")
         end
     end
 
     return map
 end
 
-local function mergeLanguages(preferred, map)
+local function getSidByLanguage(configLangKey, langMap)
 
-    local languages = {}
-    preferred       = h.splitString(preferred:gsub("_","-"))
+    local languageCodes      = mergeLanguages(configLangKey, langMap)
+    local selectedSubtitles  = {}
+    local foundLang        = ""
+    local undesiredSubtitles = h.splitString(config.rejected_words)
+    local missingMetadata    = false
+    local preferredLanguages = {}
 
-    for _, value in ipairs(preferred) do
+    for _, value in ipairs(languageCodes) do
 
-        local langCode, langCountry = value:lower():match("([^%-][^%-])%-([^%-][^%-])")
+        preferredLanguages[value] = true
+    end
 
-        if langCode and langCountry then
+    --get subtitles by language and filter them
 
-            table.insert(languages, value)
-            table.insert(languages, langCode)
+    for _, subtitle in ipairs(this.subtitles) do
 
-            if map and map[langCode] then
+        local sLang = subtitle.lang and subtitle.lang:lower() or nil
 
-                table.insert(languages, map[langCode][1]:lower())
-                table.insert(languages, map[langCode][2]:lower())
-            elseif #map > 0 then
+        if sLang then
 
-                h.notify(string.format("Unrecognized language code: %s", value), "languagecache", "warn")
+            if preferredLanguages[sLang] and (foundLang == "" or foundLang == sLang) and filter(subtitle, undesiredSubtitles) then
+
+                table.insert(selectedSubtitles, subtitle)
+
+                foundLang = sLang
+
+                if subtitle.size == 0 then missingMetadata = true end
             end
-        else
-
-            table.insert(languages, value)
         end
     end
 
-    h.log(languages)
+    if #selectedSubtitles > 1 then
 
-    return languages
+        if missingMetadata then h.notify("There are subtitles with missing metadata. Subtitle sorting may not work correctly.", "findsubtitle", "warn", nil, true) end
+
+        --sort subtitles by size
+
+        table.sort(selectedSubtitles, function(a, b)
+
+            return tonumber(a.size) > tonumber(b.size)
+        end)
+
+        --remove non-preferred subtitles
+
+        local itemsToKeep      = {}
+        local desiredSubtitles = h.splitString(config.preferred_words)
+
+        if #desiredSubtitles > 0 then
+
+            for index, subtitle in ipairs(selectedSubtitles) do
+
+                if subtitle.title and h.searchStrings(subtitle.title:lower(), desiredSubtitles) then
+
+                    table.insert(itemsToKeep, index)
+                end
+            end
+
+            if #itemsToKeep > 0 then
+
+                for index, subtitle in ipairs(selectedSubtitles) do
+
+                    if not h.searchStrings(index, itemsToKeep) then
+
+                        table.remove(selectedSubtitles, index)
+                    end
+                end
+            end
+        end
+
+        if #selectedSubtitles == 1 then return selectedSubtitles[1].id end
+
+        --get the first text-based subtitle that is not SDH
+
+        for _, subtitle in ipairs(selectedSubtitles) do
+
+            if not subtitle.hearingimpaired and subtitle.textbased then
+
+                return subtitle.id
+            end
+        end
+
+        --get the first subtitle that is not SDH
+
+        for _, subtitle in ipairs(selectedSubtitles) do
+
+            if not subtitle.hearingimpaired then
+
+                return subtitle.id
+            end
+        end
+    end
+
+    --get the first subtitle if nothing was found.
+
+    return selectedSubtitles[1] and selectedSubtitles[1].id or 0
 end
 
 local function copySubtitleToTemp(subtitle, key)
@@ -319,7 +302,7 @@ local function copySubtitleToTemp(subtitle, key)
 
     if subtitle.ext == ".ass" then
 
-        if this.isWindows then
+        if path.platform() == "windows" then
 
             h.runCommand({"powershell", "-NoProfile", "-Command", string.format("Copy-Item -LiteralPath \"%s\" -Destination \"%s\" -Force", sourceFile, targetFile)})
         else
@@ -331,7 +314,7 @@ local function copySubtitleToTemp(subtitle, key)
         h.runCommand({"ffmpeg", "-i", sourceFile, "-c:s", "ass", targetFile})
     end
 
-    return checkPath(targetFile)
+    return path.checkPath(targetFile)
 end
 
 local function mergeSubtitles()
@@ -342,25 +325,20 @@ local function mergeSubtitles()
         {path = this.getPath("cache/topfile"),    style = "Secondary", subType = "top"}
     }
 
-    local file
     local styles = {}
     local lines  = {}
     local scount = 0
 
     for _, v in ipairs(data) do
 
-        file = io.open(v.path, "r")
+        local content = path.readFile(v.path)
 
-        if file then
-
-            local content = file:read("*all")
-
-            file:close()
+        if content then
 
             local playResX, playResY, canResample
             local italicStyles = {}
 
-            if this.config.keep_ts == v.subType then
+            if config.keep_ts == v.subType then
 
                 playResX    = content:match("PlayResX: (%d+)") or 0
                 playResY    = content:match("PlayResY: (%d+)") or 0
@@ -374,7 +352,7 @@ local function mergeSubtitles()
 
                     if style then
 
-                        if this.config.detect_italics and style.Italic then table.insert(italicStyles, style.Name) end
+                        if config.detect_italics and style.Italic then table.insert(italicStyles, style.Name) end
 
                         style.Name = v.style..style.Name
 
@@ -400,7 +378,7 @@ local function mergeSubtitles()
 
                     local deleteThis = false
 
-                    if this.config.keep_ts == v.subType and line:isSign() then
+                    if config.keep_ts == v.subType and line:isSign() then
 
                         line.Style = v.style..line.Style
 
@@ -412,7 +390,7 @@ local function mergeSubtitles()
 
                         local text = line:strippedText()
 
-                        if this.config.remove_repeating_lines then
+                        if config.remove_repeating_lines then
 
                             local sKey = tostring(line.Start)..tostring(line.End)
 
@@ -425,7 +403,7 @@ local function mergeSubtitles()
                             end
                         end
 
-                        if not deleteThis and this.config.detect_italics then
+                        if not deleteThis and config.detect_italics then
 
                             if prevStyle ~= line.Style and h.hasItem(italicStyles, line.Style) then
 
@@ -438,7 +416,7 @@ local function mergeSubtitles()
                             makeItalic = makeItalic or hasItalic(line.Text)
                         end
 
-                        if not deleteThis and this.config.remove_sdh_entries then
+                        if not deleteThis and config.remove_sdh_entries then
 
                             text = sdhKiller(text)
 
@@ -448,9 +426,9 @@ local function mergeSubtitles()
                             end
                         end
 
-                        if not deleteThis and this.config[v.subType.."_tags"] ~= "" then
+                        if not deleteThis and config[v.subType.."_tags"] ~= "" then
 
-                            text = string.format("{%s}%s", this.config[v.subType.."_tags"], text)
+                            text = string.format("{%s}%s", config[v.subType.."_tags"], text)
                         end
 
                         if not deleteThis and makeItalic then
@@ -474,7 +452,7 @@ local function mergeSubtitles()
 
             if #lines > 0 then scount = scount + 1 end
 
-            removePath(v.path)
+            path.removeFile(v.path)
         end
     end
 
@@ -505,8 +483,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
 ]]
 
-    header = header:gsub("<style1>", this.config.bottom_style:gsub("[^,]*:", ""))
-    header = header:gsub("<style2>", this.config.top_style:gsub("[^,]*:", ""))
+    header = header:gsub("<style1>", config.bottom_style:gsub("[^,]*:", ""))
+    header = header:gsub("<style2>", config.top_style:gsub("[^,]*:", ""))
 
     if #styles > 0 then
 
@@ -516,13 +494,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         header = header:gsub("\n<extrastyles>", "")
     end
 
-    file = io.open(this.getPath("cache/mergedfile"), "w")
-
-    file:write(header)
-
-    for _, line in ipairs(lines) do file:write(line.."\n") end
-
-    file:close()
+    path.createFile(this.getPath("cache/mergedfile"), header..table.concat(lines, "\n"))
 
     return true
 end
@@ -544,7 +516,7 @@ local function tryMerge()
         this.merged   = this.subtitles[mp.get_property_number("sid")]
         local elapsed = mp.get_time() - mergeStart
 
-        h.notify(string.format("Subtitles merged. Took %d seconds.", elapsed), "mergesubtitles", "info", 30)
+        h.notify(string.format("Subtitles merged. Took %d seconds.", elapsed), "mergesubtitles", "info", 10)
     else
 
         h.notify(err, "mergesubtitles", "error")
@@ -558,7 +530,7 @@ function this.deleteMerged()
 
     mp.commandv("sub-remove", this.merged.id)
 
-    removePath(this.getPath("cache/merge"))
+    path.removeDir(this.getPath("cache/merge"))
 
     this.merged = nil
 
@@ -583,19 +555,9 @@ function this.merge()
 
     h.notify("Please wait...", "mergesubtitles", "info", 9999)
 
-    mergeStart     = mp.get_time()
-    local tempPath = this.getPath("cache/merge")
+    mergeStart = mp.get_time()
 
-    if not checkPath(tempPath) then
-
-        if this.isWindows then
-
-            h.runCommand({"powershell", "-NoProfile", "-Command", "mkdir", tempPath})
-        else
-
-            h.runCommand({"mkdir", "-p", tempPath})
-        end
-    end
+    path.createDir(this.getPath("cache/merge"))
 
     local remainingSubtitles = 2
     local copyError          = false
@@ -697,44 +659,39 @@ function this.getPath(key)
 
     this.hash = this.hash or h.hash(mp.get_property("path"))
 
-    local fullPath
-
     if key == "csvfile" then
 
-        fullPath = utils.join_path(this.paths.script, "language-codes-3b2.csv")
+        return path.join({"%scripts", mp.get_script_name(), "language-codes-3b2.csv"})
     elseif key == "scriptfile" then
 
-        fullPath = utils.join_path(this.paths.script, "main.lua")
+        return path.join({"%scripts", mp.get_script_name(), "main.lua"})
     elseif key == "configfile" then
 
-        fullPath = utils.join_path(this.paths.config, "dualsubtitles.conf")
+        return path.join({"%options", "dualsubtitles.conf"})
     elseif key == "videofile" then
 
-        fullPath = mp.get_property("path")
+        return mp.get_property("path")
     elseif key == "cache/languagefile" then
 
-        fullPath = utils.join_path(this.paths.temp, this.cacheDir..this.seperator..this.files.language..".json")
+        return path.join({"%temp", this.tempDir, "cachedlanguages.json"})
     elseif key == "cache" then
 
-        fullPath = utils.join_path(this.paths.temp, this.cacheDir)
+        return path.join({"%temp", this.tempDir})
     elseif key == "cache/merge" then
 
-        fullPath = utils.join_path(this.paths.temp, this.cacheDir..this.seperator..this.hash)
+        return path.join({"%temp", this.tempDir, this.hash})
     elseif key == "cache/bottomfile" then
 
-        fullPath = utils.join_path(this.paths.temp, this.cacheDir..this.seperator..this.hash..this.seperator..this.files.bottom..".ass")
+        return path.join({"%temp", this.tempDir, this.hash, "primary.ass"})
     elseif key == "cache/topfile" then
 
-        fullPath = utils.join_path(this.paths.temp, this.cacheDir..this.seperator..this.hash..this.seperator..this.files.top..".ass")
+        return path.join({"%temp", this.tempDir, this.hash, "secondary.ass"})
     elseif key == "cache/mergedfile" then
 
-        fullPath = utils.join_path(this.paths.temp, this.cacheDir..this.seperator..this.hash..this.seperator..this.files.merged..".ass")
+        return path.join({"%temp", this.tempDir, this.hash, "merged.ass"})
     end
 
-    fullPath = fullPath:gsub("\\", "/")
-    fullPath = mp.command_native({'expand-path', fullPath})
-
-    return fullPath
+    return nil
 end
 
 function this.updateList(trackcount)
@@ -748,11 +705,24 @@ function this.updateList(trackcount)
     end
 end
 
+function this.addStyleOverride(overrides, style, property, value)
+
+    overrides = overrides:gsub(",?"..h.escape(string.format("%s.%s", style, property)).."=[^,]*", "")
+
+    if value then
+
+        overrides = overrides ~= "" and overrides.."," or overrides
+        overrides = overrides..string.format("%s.%s=%s", style, property, value)
+    end
+
+    return overrides
+end
+
 function this.load()
 
-    local langMap   = getLanguageMap(this.config.bottom_languages..","..this.config.top_languages)
-    local bottomSid = getSidByLanguage(mergeLanguages(this.config.bottom_languages, langMap))
-    local topSid    = getSidByLanguage(mergeLanguages(this.config.top_languages,    langMap))
+    local langMap   = getLanguageMap()
+    local bottomSid = getSidByLanguage("bottom", langMap)
+    local topSid    = getSidByLanguage("top",    langMap)
 
     if bottomSid > 0 and bottomSid == topSid then
 
@@ -778,7 +748,7 @@ end
 
 function this.loadMerged()
 
-    if checkPath(this.getPath("cache/mergedfile")) then
+    if path.checkPath(this.getPath("cache/mergedfile")) then
 
         mp.commandv("sub-add", this.getPath("cache/mergedfile"))
 
@@ -795,24 +765,26 @@ function this.toggle(bottom, top)
 
     if this.isMergedSelected() then
 
-        local overrides     = mp.get_property("sub-ass-style-overrides")
-        local hidePrimary   = "Primary.AlphaLevel=255"
-        local hideSecondary = "Secondary.AlphaLevel=255"
+        local overrideMode = mp.get_property("sub-ass-override", "")
+
+        if not (overrideMode == "yes" or overrideMode == "scale") then h.notify("Style override functionality only works with \"--sub-ass-override=yes\" or \"--sub-ass-override=scale\".", "styleoverride", "warn", nil, true) end
+
+        local overrides = mp.get_property("sub-ass-style-overrides", "")
 
         if bottom == 1 then
 
-            overrides = overrides:gsub(",?"..hidePrimary:gsub("%.", "%%."), "")
+            overrides = this.addStyleOverride(overrides, "Primary", "AlphaLevel", nil)
         else
 
-            overrides = (overrides == "") and hidePrimary or overrides..","..hidePrimary
+            overrides = this.addStyleOverride(overrides, "Primary", "AlphaLevel", "255")
         end
 
         if top == 1 then
 
-            overrides = overrides:gsub(",?"..hideSecondary:gsub("%.", "%%."), "")
+            overrides = this.addStyleOverride(overrides, "Secondary", "AlphaLevel", nil)
         else
 
-            overrides = (overrides == "") and hideSecondary or overrides..","..hideSecondary
+            overrides = this.addStyleOverride(overrides, "Secondary", "AlphaLevel", "255")
         end
 
         mp.set_property("sub-ass-style-overrides", overrides)
@@ -833,11 +805,6 @@ function this.display()
 
     mp.set_property_native("sid",           this.bottom and this.bottom.id or 0)
     mp.set_property_native("secondary-sid", this.top    and this.top.id    or 0)
-end
-
-function this.init(config)
-
-    this.config = config
 end
 
 return this
