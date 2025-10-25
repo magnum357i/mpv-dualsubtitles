@@ -134,7 +134,7 @@ External subtitles loaded on startup can be automatically selected based on your
 
 
 | Accepted Filename Formats for My Plugin |
-|--------------- -|
+|-----------------|
 | `en.srt`        |
 | `eng.srt`       |
 | `movie.en.srt`  |
