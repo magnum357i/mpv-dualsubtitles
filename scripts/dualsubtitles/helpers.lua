@@ -15,6 +15,25 @@ function this.log(str)
     end
 end
 
+function this.log2(t, indent)
+
+    indent    = indent or 0
+    local tab = string.rep("  ", indent)
+
+    for k, v in pairs(t) do
+
+        if type(v) == "table" then
+
+            print(tab..tostring(k)..":")
+
+            this.log2(v, indent + 1)
+        else
+
+            print(tab..tostring(k).." = "..tostring(v))
+        end
+    end
+end
+
 function this.notify(msg,errType,level,duration,silent)
 
     duration = duration and duration or 5
@@ -45,11 +64,13 @@ function this.notify(msg,errType,level,duration,silent)
     end
 end
 
-function this.splitString(str)
+function this.splitString(str, splitter)
+
+    splitter = splitter or ","
 
     local list = {}
 
-    for val in string.gmatch(str, "([^,]+)") do
+    for val in string.gmatch(str, "([^"..splitter.."]+)") do
 
         table.insert(list, val)
     end
@@ -159,6 +180,27 @@ end
 function this.escape(str)
 
     return str:gsub("[%.%+%-%*%?%^%$%(%)%[%]]", "%%%1")
+end
+
+function this.removeItems(t, cond, keepMatching)
+
+    local itemsToDelete = {}
+
+    for index, item in ipairs(t) do
+
+        if cond(index, item) then
+
+            itemsToDelete[index] = true
+        end
+    end
+
+    if next(itemsToDelete) ~= nil then
+
+        for i = #t, 1, -1 do
+
+            if keepMatching and not itemsToDelete[i] or not keepMatching and itemsToDelete[i] then table.remove(t, i) end
+        end
+    end
 end
 
 return this

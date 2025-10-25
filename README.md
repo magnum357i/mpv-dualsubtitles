@@ -7,37 +7,6 @@ Dual subtitles plugin for mpv.
 
 - FFmpeg (for merging)
 
-# Installation
-
-If FFmpeg is already installed on your system, just move the **dualsubtitles** folder to your scripts directory. To install via command line:
-
-### Windows (Powershell)
-
-```
-# FFmpeg
-New-Item -ItemType Directory -Path "C:\FFmpeg"; Set-Location "C:\FFmpeg"
-curl -L "https://www.gyan.dev/ffmpeg/builds/ffmpeg-git-full.7z" -o "FFmpeg.7z"
-tar -xf FFmpeg.7z
-Get-ChildItem -Directory "*build" | ForEach-Object { Move-Item "$_\bin" . }
-Remove-Item "ffmpeg*" -Recurse -Force
-[Environment]::SetEnvironmentVariable("Path", ([Environment]::GetEnvironmentVariable("Path","User") + ";C:\FFmpeg\bin"), "User")
-# Plugin
-git clone --depth 1 https://github.com/magnum357i/mpv-dualsubtitles "$env:TEMP\gitmpvdualsubtitles"
-Copy-Item -Path "$env:TEMP\gitmpvdualsubtitles\dualsubtitles" -Destination "$env:APPDATA\mpv\scripts" -Recurse -Force
-```
-
-*Please run as administrator.*
-
-### Linux
-
-```
-# FFmpeg
-pacman -S ffmpeg
-# Plugin
-git clone --depth 1 https://github.com/magnum357i/mpv-dualsubtitles /tmp/gitmpvdualsubtitles
-mkdir -p ~/.config/mpv/scripts && cp -r /tmp/gitmpvdualsubtitles/dualsubtitles ~/.config/mpv/scripts/
-```
-
 # Key Bindings
 | shortcut            | description                               |
 | ------------------- | ----------------------------------------- |
@@ -62,59 +31,89 @@ mkdir -p ~/.config/mpv/scripts && cp -r /tmp/gitmpvdualsubtitles/dualsubtitles ~
 
 Forced subtitles are never selected when full subtitles are available, even if they are not properly marked. And hearing-impaired subtitles are better than no subtitle.
 
+# Language Tag
+You don’t have to specify every variation of a language. Just enter the language and region code, and it will create the variations. For example:
+
+| Input Tag | Result                           |
+|-----------|----------------------------------|
+| `en:us`   | `en-us`, `en`, `eng`, `english`  |
+| `ja`      | `ja`, `jpn`, `japanese`          |
+| `tr`      | `tr`, `tur`, `turkish`           |
+
 # Configuration
-Create a file named `dualsubtitles.conf` in the script-opts directory, and copy the content below into it. You can now modify the settings as desired.
 
 ```ini
-# Subtitles to be auto-selected at startup (The first one has the highest priority)
+# Subtitles to Be Auto-Selected at Startup (The First One Has the Highest Priority)
 #
-# Format: <langCode>-<countryCode>
-# Lang list: https://en.wikipedia.org/wiki/List_of_ISO_639_language_codes
-# Country list: https://en.wikipedia.org/wiki/List_of_ISO_3166_country_codes
-top_languages=tr-tr
-bottom_languages=en-us,ja-jp
+#
+# FORMAT
+# <lang>:<region>
+#
+# Language list: https://en.wikipedia.org/wiki/List_of_ISO_639_language_codes
+# Region list: https://en.wikipedia.org/wiki/List_of_ISO_3166_country_codes
+#
+#
+# PRIORITY
+# en:us = en-us > en / eng / english
+# en = en / eng / english
+top_languages=tr
+bottom_languages=en:us,ja
 
-# Use only the matching ones, if any subtitles contain these words
-preferred_words=full
+# Use only the matching ones, if any subtitles contain these words.
+preferred_words=
 
-# Always skip subtitles if their title contains these words
+# Skip subtitles with these words in their title.
 rejected_words=sign,song
 
-# Set top subtitle as bottom subtitle if bottom subtitle is missing
+# Set top subtitle as bottom subtitle if bottom subtitle is missing.
 use_top_as_bottom=yes
 
-# Display secondary subtitle on hover
+# Display secondary subtitle on hover.
 secondary_on_hover=no
 
-# Secondary subtitle hover area (50 = the top half of the screen)
+# Secondary Subtitle Hover Area (50 = the top half of the screen)
 hover_height_percent=50
 
-# Style settings for merged subtitles
+# Style Settings for Merged Subtitles
 # In MPV, styling options for secondary subtitles are quite limited. By merging subtitles, you can work around this limitation. If your video file is on an HDD, this process may take 2–3 minutes.
-top_style=fn:Arial,fs:70,1c:&H0000DEFF,2c:&H000000FF,3c:&H00000000,4c:&H00000000,b:0,i:0,u:0,s:0,sx:100,sy:100,fsp:0,frz:0,bs:1,bord:3,shad:0,an:8,ml:0,mr:0,mv:40,enc:1
-bottom_style=fn:Arial,fs:70,1c:&H00FFFFFF,2c:&H000000FF,3c:&H00000000,4c:&H00000000,b:0,i:0,u:0,s:0,sx:100,sy:100,fsp:0,frz:0,bs:1,bord:3,shad:0,an:2,ml:0,mr:0,mv:40,enc:1
+# Values are given in 1920×1080 resolution.
+#
+#
+# Color format: <alpha><alpha><b><b><g><g><r><r>
+# Example: 370DE2 (RGB) > E20D37 (BGR) > &H00E20D37 (ASS)
+# You can convert any RGB value to BGR by swapping the first and last two characters. Just remember that the first two characters in an ASS color code represent the alpha channel.
+#
+#
+# Live Preview: https://github.com/magnum357i/mpv-stylesmanager
+top_style=fn:Segoe UI Semibold,fs:60,1c:&H0000DEFF,2c:&H000000FF,3c:&H00000000,4c:&H00000000,b:0,i:0,u:0,s:0,sx:100,sy:100,fsp:0,frz:0,bs:1,bord:4,shad:0,an:8,ml:0,mr:0,mv:40,enc:1
+bottom_style=fn:Calibri,fs:60,1c:&H00FFFFFF,2c:&H000000FF,3c:&H00000000,4c:&H00000000,b:0,i:0,u:0,s:0,sx:100,sy:100,fsp:0,frz:0,bs:1,bord:1.5,shad:0,an:2,ml:0,mr:0,mv:40,enc:1
 
-# ASS tags for merged subtitles
+# ASS Tags for Merged Subtitles
 # When a line is stripped based on your current settings, these tags will be added to it.
+#
 # ASS Tags Page (official): https://aegisub.org/docs/latest/ass_tags/
 top_tags=
 bottom_tags=\blur4
 
-# Don’t strip sign lines
+# Don’t strip sign lines.
 # If the ASS file contains sign lines (lines with a pos tag) and you don’t want them to be stripped, you can use this option.
+#
+#
 # Valid options: bottom, top, and none
 keep_ts=none
 
-# Removes entries like "(wind blowing)" or "MAN 1:"
+# Removes entries like "(wind blowing)" or "MAN 1:".
 # Don’t expect perfect results. If you have a SDH subtitle, and the cues are very distracting, you might want to try this setting.
 remove_sdh_entries=no
 
-# Enable extended search for external subtitles
+# Enable extended search for external subtitles.
 # Loads subtitles from subfolders with the same name as the video file. Useful for series.
-# Do not enable this setting if you are using something similar.
+#
+#
+# NOTE: Do not enable this setting if you are using something similar.
 expand_subtitle_search=no
 
-# Keep italics during merging
+# Keep italics during merging.
 detect_italics=yes
 
 # Prevents you from seeing the same text 20 times on the screen.
@@ -124,7 +123,7 @@ remove_repeating_lines=no
 # External Subtitles
 
 ### Naming
-External subtitles loaded at startup can be automatically selected based on your preferred languages. Make sure the subtitle filename ends with a language code.
+External subtitles loaded on startup can be automatically selected based on your preferred languages. Make sure the subtitle filename ends with a language code.
 
 | Accepted Filename Formats for MPV |
 |-----------------|
@@ -135,7 +134,7 @@ External subtitles loaded at startup can be automatically selected based on your
 
 
 | Accepted Filename Formats for My Plugin |
-|-----------------|
+|--------------- -|
 | `en.srt`        |
 | `eng.srt`       |
 | `movie.en.srt`  |

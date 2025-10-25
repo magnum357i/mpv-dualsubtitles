@@ -102,43 +102,44 @@ end
 
 local function mergeLanguages(configLangKey, map)
 
-    local preferredLanguages = h.splitString(config[configLangKey.."_languages"])
+    if map == nil or next(map) == nil then h.notify("You entered invalid languages, or the CSV file is broken.", "languagecache", "error") end
 
-    if map == nil or next(map) == nil then
+    local preferredLanguages = h.splitString(config[configLangKey])
+    local languageList       = {}
+    local n                  = 1
 
-        h.notify("You entered invalid languages, or the CSV file is broken.", "languagecache", "error")
+    for _, val in ipairs(preferredLanguages) do
 
-        return preferredLanguages
-    end
+        languageList[n] = {codes = {}, subCodes = {}}
+        local lang      = val:gsub(":.+", ""):lower()
 
-    local languageList = {}
+        table.insert(languageList[n].codes, lang)
 
-    for _, value in ipairs(preferredLanguages) do
+        if map[lang] then
 
-        local langCode, langCountry = value:match("([a-z][a-z])%-([a-z][a-z])")
-
-        if langCode and langCountry then
-
-            table.insert(languageList, value)
-            table.insert(languageList, langCode)
-
-            if map[langCode] then
-
-                table.insert(languageList, map[langCode][1])
-                table.insert(languageList, map[langCode][2])
-            else
-
-                h.notify(string.format("This value isn’t in the map table: %s", value), "languagecache", "warn", nil, true)
-            end
+            table.insert(languageList[n].codes, map[lang][1])
+            table.insert(languageList[n].codes, map[lang][2])
         else
 
-            h.notify(string.format("Invalid language code: %s", value), "languagecache", "warn", nil, true)
-
-            table.insert(languageList, value)
+            h.notify(string.format("This value isn’t in the map table: %s", lang), "languagecache", "warn", nil, true)
         end
+
+        local subCodes = h.splitString(val, ":")
+
+        if #subCodes > 1 then
+
+            table.remove(subCodes, 1)
+
+            for _, z in ipairs(subCodes) do
+
+                table.insert(languageList[n].subCodes, z)
+            end
+        end
+
+        n = n + 1
     end
 
-    h.log(configLangKey.."="..table.concat(languageList, ","))
+    h.log(string.format("%s = %s", configLangKey, utils.format_json(languageList)))
 
     return languageList
 end
@@ -167,17 +168,20 @@ local function getLanguageMap()
     local map                   = {}
     local langKeys              = {}
 
-    for _, lang in ipairs(allPreferredLanguages) do
+    for _, val in ipairs(allPreferredLanguages) do
 
-        table.insert(langKeys, lang:find("-", 1, true) and lang:gsub("%-.+","") or lang)
+        val = val:gsub(":.+", "")
+        val = val:lower()
+
+        langKeys[val] = true
     end
 
-    for iso3, iso2, title in string.gmatch(csvContent, '"([^"]*)","([^"]*)","([^"]*)"') do
+    for code3, code2, title in string.gmatch(csvContent, '"([^"]*)","([^"]*)","([^"]*)"') do
 
-        if h.hasItem(langKeys, iso2) then
+        if langKeys[code2] then
 
-            title     = title:gsub("[,;].+", "")
-            map[iso2] = {iso3, title}
+            title      = title:gsub("[,;].+", "")
+            map[code2] = {code3, title:lower()}
         end
     end
 
@@ -198,40 +202,107 @@ end
 
 local function getSidByLanguage(configLangKey, langMap)
 
-    local languageCodes      = mergeLanguages(configLangKey, langMap)
-    local selectedSubtitles  = {}
-    local foundLang        = ""
-    local undesiredSubtitles = h.splitString(config.rejected_words)
-    local missingMetadata    = false
-    local preferredLanguages = {}
+    local languageCodes     = mergeLanguages(configLangKey, langMap)
+    local undesiredWords    = h.splitString(config.rejected_words)
+    local selectedSubtitles = {}
+    local missingMetadata   = false
+    local foundLangId       = 0
 
-    for _, value in ipairs(languageCodes) do
+    for idx, val in ipairs(languageCodes) do
 
-        preferredLanguages[value] = true
-    end
+        foundLangId              = idx
+        local preferredLanguages = {}
 
-    --get subtitles by language and filter them
+        for _, l in ipairs(val.codes) do
 
-    for _, subtitle in ipairs(this.subtitles) do
+            preferredLanguages[l] = true
+        end
 
-        local sLang = subtitle.lang and subtitle.lang:lower() or nil
+        for _, subtitle in ipairs(this.subtitles) do
 
-        if sLang then
+            local sLang = subtitle.lang and subtitle.lang:lower():gsub("[%-_].+", "") or nil
 
-            if preferredLanguages[sLang] and (foundLang == "" or foundLang == sLang) and filter(subtitle, undesiredSubtitles) then
+            if sLang then
 
-                table.insert(selectedSubtitles, subtitle)
+                if preferredLanguages[sLang] and filter(subtitle, undesiredWords) then
 
-                foundLang = sLang
+                    table.insert(selectedSubtitles, subtitle)
 
-                if subtitle.size == 0 then missingMetadata = true end
+                    if subtitle.size == 0 then missingMetadata = true end
+                end
             end
         end
+
+        if next(selectedSubtitles) ~= nil then break end
     end
 
     if #selectedSubtitles > 1 then
 
-        if missingMetadata then h.notify("There are subtitles with missing metadata. Subtitle sorting may not work correctly.", "findsubtitle", "warn", nil, true) end
+        if missingMetadata then h.notify("There are subtitles with missing metadata. Sorting may not work correctly.", "findsubtitle", "warn", nil, true) end
+
+        --filter by subcodes
+
+        if #languageCodes[foundLangId].subCodes > 0 then
+
+
+            local priorities = {}
+            local code       = languageCodes[foundLangId].codes[1]
+
+            for n, val in ipairs(languageCodes[foundLangId].subCodes) do
+
+                priorities[string.format("%s-%s", code, val)] = n
+            end
+
+            table.sort(selectedSubtitles, function(a, b)
+
+                local aLang = a.lang and a.lang:lower() or nil
+                local bLang = b.lang and b.lang:lower() or nil
+                local aP    = aLang and priorities[aLang] or 50
+                local bP    = bLang and priorities[bLang] or 50
+
+                return aP < bP
+            end)
+
+            local firstLang = selectedSubtitles[1].lang
+
+            if firstLang then
+
+                firstLang = firstLang:lower()
+
+                if priorities[firstLang] then
+
+                    h.removeItems(selectedSubtitles, function(_, val)
+
+                        local sLang = val.lang and val.lang:lower() or nil
+
+                        if sLang and sLang == firstLang then return true end
+
+                        return false
+                    end, true)
+                end
+            end
+
+            if #selectedSubtitles == 1 then return selectedSubtitles[1].id end
+        end
+
+        --filter by preferred words
+
+        if config.preferred_words ~= "" then
+
+            local desiredWords = h.splitString(config.preferred_words)
+
+            if #desiredWords > 0 then
+
+                h.removeItems(selectedSubtitles, function(_, val)
+
+                    if val.title and h.searchStrings(val.title:lower(), desiredWords) then return true end
+
+                    return false
+                end, true)
+            end
+
+            if #selectedSubtitles == 1 then return selectedSubtitles[1].id end
+        end
 
         --sort subtitles by size
 
@@ -240,36 +311,7 @@ local function getSidByLanguage(configLangKey, langMap)
             return tonumber(a.size) > tonumber(b.size)
         end)
 
-        --remove non-preferred subtitles
-
-        local itemsToKeep      = {}
-        local desiredSubtitles = h.splitString(config.preferred_words)
-
-        if #desiredSubtitles > 0 then
-
-            for index, subtitle in ipairs(selectedSubtitles) do
-
-                if subtitle.title and h.searchStrings(subtitle.title:lower(), desiredSubtitles) then
-
-                    table.insert(itemsToKeep, index)
-                end
-            end
-
-            if #itemsToKeep > 0 then
-
-                for index, subtitle in ipairs(selectedSubtitles) do
-
-                    if not h.searchStrings(index, itemsToKeep) then
-
-                        table.remove(selectedSubtitles, index)
-                    end
-                end
-            end
-        end
-
-        if #selectedSubtitles == 1 then return selectedSubtitles[1].id end
-
-        --get the first text-based subtitle that is not SDH
+        --get first text-based subtitle that is not SDH
 
         for _, subtitle in ipairs(selectedSubtitles) do
 
@@ -279,7 +321,7 @@ local function getSidByLanguage(configLangKey, langMap)
             end
         end
 
-        --get the first subtitle that is not SDH
+        --get first subtitle that is not SDH
 
         for _, subtitle in ipairs(selectedSubtitles) do
 
@@ -290,7 +332,7 @@ local function getSidByLanguage(configLangKey, langMap)
         end
     end
 
-    --get the first subtitle if nothing was found.
+    --get first subtitle if nothing was found
 
     return selectedSubtitles[1] and selectedSubtitles[1].id or 0
 end
@@ -721,8 +763,8 @@ end
 function this.load()
 
     local langMap   = getLanguageMap()
-    local bottomSid = getSidByLanguage("bottom", langMap)
-    local topSid    = getSidByLanguage("top",    langMap)
+    local bottomSid = getSidByLanguage("bottom_languages", langMap)
+    local topSid    = getSidByLanguage("top_languages",    langMap)
 
     if bottomSid > 0 and bottomSid == topSid then
 

@@ -4,18 +4,18 @@ https://github.com/magnum357i/mpv-dualsubtitles/
 
 ╔════════════════════════════════╗
 ║        MPV dualsubtitles       ║
-║              v2.3.0            ║
+║              v2.3.1            ║
 ╚════════════════════════════════╝
 
 ## Required ##
 FFmpeg (for subtitle merging)
 
-## Standardized Codes ##
-Languages (ISO 639): https://en.wikipedia.org/wiki/List_of_ISO_639_language_codes
-Countries (ISO 3166): https://en.wikipedia.org/wiki/List_of_ISO_3166_country_codes
+## Codes ##
+Language list: https://en.wikipedia.org/wiki/List_of_ISO_639_language_codes
+Country list: https://en.wikipedia.org/wiki/List_of_ISO_3166_country_codes
 
-## Language Reference ##
-CSV Data: https://github.com/datasets/language-codes/blob/main/data/language-codes-3b2.csv
+## CSV Data Source ##
+https://github.com/datasets/language-codes/blob/main/data/language-codes-3b2.csv
 
 ]]
 
@@ -27,9 +27,9 @@ local subtitle = require "dualsubtitles"
 config = {
 
     --auto select
-    top_languages            = "tr-tr",
-    bottom_languages         = "en-us,ja-jp",
-    preferred_words          = "full",
+    top_languages            = "tr",
+    bottom_languages         = "en:us,ja",
+    preferred_words          = "",
     rejected_words           = "sign,song",
     use_top_as_bottom        = true,
 
@@ -40,8 +40,8 @@ config = {
 
 
     --merged subtitle
-    top_style                = "fn:Segoe UI Semibold,fs:70,1c:&H0000DEFF,2c:&H000000FF,3c:&H00000000,4c:&H00000000,b:0,i:0,u:0,s:0,sx:100,sy:100,fsp:0,frz:0,bs:1,bord:4,shad:0,an:8,ml:0,mr:0,mv:40,enc:1",
-    bottom_style             = "fn:Calibri,fs:70,1c:&H00FFFFFF,2c:&H000000FF,3c:&H00000000,4c:&H00000000,b:0,i:0,u:0,s:0,sx:100,sy:100,fsp:0,frz:0,bs:1,bord:1.5,shad:0,an:2,ml:0,mr:0,mv:40,enc:1",
+    top_style                = "fn:Segoe UI Semibold,fs:60,1c:&H0000DEFF,2c:&H000000FF,3c:&H00000000,4c:&H00000000,b:0,i:0,u:0,s:0,sx:100,sy:100,fsp:0,frz:0,bs:1,bord:4,shad:0,an:8,ml:0,mr:0,mv:40,enc:1",
+    bottom_style             = "fn:Calibri,fs:60,1c:&H00FFFFFF,2c:&H000000FF,3c:&H00000000,4c:&H00000000,b:0,i:0,u:0,s:0,sx:100,sy:100,fsp:0,frz:0,bs:1,bord:1.5,shad:0,an:2,ml:0,mr:0,mv:40,enc:1",
     top_tags                 = "",
     bottom_tags              = "\\blur4",
 
@@ -49,6 +49,7 @@ config = {
     keep_ts                  = "none", --bottom, top, none
     remove_sdh_entries       = false,
     remove_repeating_lines   = false,
+
 
     --misc
     expand_subtitle_search   = false,
