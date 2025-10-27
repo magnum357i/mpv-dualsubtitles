@@ -64,8 +64,6 @@ function this.resampleStyle(style)
     style.MarginL  = math.floor(style.MarginL * rx + 0.5)
     style.MarginR  = math.floor(style.MarginR * rx + 0.5)
     style.MarginV  = math.floor(style.MarginV * ry + 0.5)
-
-    return style
 end
 
 local tagMap = {
@@ -250,8 +248,6 @@ function this.resampleDialogue(line)
 
         return string.format("%s%s", p, this.resampleDrawing(drawing))
     end)
-
-    return line
 end
 
 return this

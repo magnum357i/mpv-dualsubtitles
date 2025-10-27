@@ -3,65 +3,73 @@ local subtitle = {}
 
 subtitle.__index = subtitle
 
-local function isForced(trackInfo)
+local function isTextBased(track)
 
-    if trackInfo.forced     then return true  end
-    if not trackInfo.title  then return false end
-
-    local stitle = trackInfo.title:lower()
-
-    return stitle:find("forced") and true or false
+    return track.codec and (track.codec == "subrip" or track.codec == "ass")
 end
 
-local function isHearingImpaired(trackInfo)
+local function isForced(track)
 
-    if trackInfo.hearing_impaired then return true  end
-    if not trackInfo.title        then return false end
+    if track.forced                                       then return true end
+    if track.title and track.title:lower():find("forced") then return true end
 
-    local stitle = trackInfo.title:lower()
-
-    return (stitle:find("sdh") or stitle:find("cc")) and true or false
+    return false
 end
 
-local function getExt(trackInfo)
+local function isHearingImpaired(track)
 
-    if     trackInfo.codec == "subrip"            then return ".srt"
-    elseif trackInfo.codec == "ass"               then return ".ass"
-    elseif trackInfo.codec == "hdmv_pgs_subtitle" then return ".sup" end
+    if track.hearing_impaired then return true  end
+    if not track.title        then return false end
 
-    return nil
+    local sTitle = track.title:lower()
+
+    if sTitle:find("sdh") or sTitle:find("cc") then return true end
+
+    return false
 end
 
-local function detectSubtitleInfo(trackInfo)
+local function getExt(track)
 
-    local externalSubtitle = utils.file_info(trackInfo["external-filename"])
-    local lang             = trackInfo.title and string.match("."..trackInfo.title, "[%.%-%s]([a-zA-Z][a-zA-Z][a-zA-Z]?)%.[a-z][a-z][a-z]$") or nil
-    local bytes            = externalSubtitle and externalSubtitle.size or 0
+    if not track.codec then return nil end
+
+    local extensionList = {
+
+        subrip            = ".srt",
+        ass               = ".ass",
+        hdmv_pgs_subtitle = ".sup"
+    }
+
+    return extensionList[track.codec]
+end
+
+local function detectSubtitleInfo(track)
+
+    local lang      = track.title and string.match("."..track.title, "[%.%-%s]([a-zA-Z][a-zA-Z][a-zA-Z]?)%.[a-z][a-z][a-z]$") or nil
+    local eSubtitle = utils.file_info(track["external-filename"])
+    local bytes     = eSubtitle and eSubtitle.size or 0
 
     return lang, bytes
 end
 
-function subtitle:new(trackInfo)
+function subtitle:new(track)
 
     local obj           = {}
-
-    obj.id              = trackInfo.id
-    obj.title           = trackInfo.title
-    obj.ext             = getExt(trackInfo)
-    obj.textbased       = obj.ext and (obj.ext == ".srt" or obj.ext == ".ass")
-    obj.external        = trackInfo.external
-    obj.lang            = trackInfo.lang
-    obj.size            = trackInfo.metadata and trackInfo.metadata.NUMBER_OF_BYTES or 0
-    obj.default         = trackInfo.default
-    obj.forced          = isForced(trackInfo)
-    obj.hearingimpaired = isHearingImpaired(trackInfo)
-    obj.visualimpaired  = trackInfo["visual-impaired"] and true or false
-    obj.path            = trackInfo["external-filename"]
+    obj.id              = track.id
+    obj.title           = track.title
+    obj.ext             = getExt(track)
+    obj.textbased       = isTextBased(track)
+    obj.external        = track.external
+    obj.lang            = track.lang and track.lang:lower():gsub("_", "-") or nil
+    obj.size            = track.metadata and track.metadata.NUMBER_OF_BYTES or 0
+    obj.default         = track.default
+    obj.forced          = isForced(track)
+    obj.hearingimpaired = isHearingImpaired(track)
+    obj.visualimpaired  = track["visual-impaired"]
+    obj.path            = track["external-filename"]
 
     if obj.external then
 
-        local lang, bytes = detectSubtitleInfo(trackInfo)
-
+        local lang, bytes = detectSubtitleInfo(track)
         obj.lang          = obj.lang or lang
         obj.size          = bytes
     end

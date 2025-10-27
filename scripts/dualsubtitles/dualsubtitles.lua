@@ -6,7 +6,6 @@ local subtitle  = require "subtitle"
 local resampler = require "resampler"
 local assline   = require "assline"
 local path      = require "path"
-
 local this      = {
 
     subtitles      = {},
@@ -18,6 +17,8 @@ local this      = {
     tempDir        = "mpvdualsubtitles"
 }
 
+local mergeStart
+
 local function filter(subtitle,wordsToFilter)
 
     if subtitle.forced                                                           then return false end
@@ -28,7 +29,7 @@ end
 
 local function hasItalic(text)
 
-    --sdh
+    --SDH
     text = text:gsub("^%s*%[.-%]", "")
     text = text:gsub("^%s*\\N", "")
 
@@ -87,12 +88,9 @@ local function getSubtitleList()
     local list   = {}
     local tracks = mp.get_property_native('track-list')
 
-    for index, value in ipairs(tracks) do
+    for _, value in ipairs(tracks) do
 
-        if value.type == "sub" then
-
-            table.insert(list, subtitle:new(value))
-        end
+        if value.type == "sub" then table.insert(list, subtitle:new(value)) end
     end
 
     this.prevTrackCount = #tracks
@@ -106,40 +104,49 @@ local function mergeLanguages(configLangKey, map)
 
     local preferredLanguages = h.splitString(config[configLangKey])
     local languageList       = {}
+    local previousLangs      = {}
     local n                  = 1
 
     for _, val in ipairs(preferredLanguages) do
 
-        languageList[n] = {codes = {}, subCodes = {}}
-        local lang      = val:gsub(":.+", ""):lower()
+        local lang = val:gsub(":.+", "")
 
-        table.insert(languageList[n].codes, lang)
+        if previousLangs[lang] then
 
-        if map[lang] then
-
-            table.insert(languageList[n].codes, map[lang][1])
-            table.insert(languageList[n].codes, map[lang][2])
+            h.notify(string.format("Duplicate language detected: %s", lang), "languagecache", "warn", nil, true)
         else
 
-            h.notify(string.format("This value isn’t in the map table: %s", lang), "languagecache", "warn", nil, true)
-        end
+            languageList[n] = {codes = {}, subCodes = {}}
 
-        local subCodes = h.splitString(val, ":")
+            table.insert(languageList[n].codes, lang)
 
-        if #subCodes > 1 then
+            if map[lang] then
 
-            table.remove(subCodes, 1)
+                table.insert(languageList[n].codes, map[lang][1])
+                table.insert(languageList[n].codes, map[lang][2])
+            else
 
-            for _, z in ipairs(subCodes) do
-
-                table.insert(languageList[n].subCodes, z)
+                h.notify(string.format("This value isn’t in the map table: %s", lang), "languagecache", "warn", nil, true)
             end
-        end
 
-        n = n + 1
+            local subCodes = h.splitString(val, ":")
+
+            if next(subCodes) ~= nil then
+
+                table.remove(subCodes, 1)
+
+                for _, z in ipairs(subCodes) do
+
+                    table.insert(languageList[n].subCodes, z)
+                end
+            end
+
+            n                   = n + 1
+            previousLangs[lang] = true
+        end
     end
 
-    h.log(string.format("%s = %s", configLangKey, utils.format_json(languageList)))
+    h.log(utils.format_json({[configLangKey] = languageList}))
 
     return languageList
 end
@@ -171,17 +178,16 @@ local function getLanguageMap()
     for _, val in ipairs(allPreferredLanguages) do
 
         val = val:gsub(":.+", "")
-        val = val:lower()
 
         langKeys[val] = true
     end
 
-    for code3, code2, title in string.gmatch(csvContent, '"([^"]*)","([^"]*)","([^"]*)"') do
+    for alpha3_b, alpha2, name in csvContent:gmatch( '"([^"]*)","([^"]*)","([^"]*)"') do
 
-        if langKeys[code2] then
+        if langKeys[alpha2] then
 
-            title      = title:gsub("[,;].+", "")
-            map[code2] = {code3, title:lower()}
+            name        = name:gsub("[,;].+", "")
+            map[alpha2] = {alpha3_b, name:lower()}
         end
     end
 
@@ -220,7 +226,7 @@ local function getSidByLanguage(configLangKey, langMap)
 
         for _, subtitle in ipairs(this.subtitles) do
 
-            local sLang = subtitle.lang and subtitle.lang:lower():gsub("[%-_].+", "") or nil
+            local sLang = subtitle.lang and subtitle.lang:gsub("%-.+", "") or nil
 
             if sLang then
 
@@ -242,44 +248,35 @@ local function getSidByLanguage(configLangKey, langMap)
 
         --filter by subcodes
 
-        if #languageCodes[foundLangId].subCodes > 0 then
+        if next(languageCodes[foundLangId].subCodes) ~= nil then
 
-
-            local priorities = {}
-            local code       = languageCodes[foundLangId].codes[1]
+            local code = languageCodes[foundLangId].codes[1]
+            local firstLang
 
             for n, val in ipairs(languageCodes[foundLangId].subCodes) do
 
-                priorities[string.format("%s-%s", code, val)] = n
+                local subCode = string.format("%s-%s", code, val)
+
+                for _, subtitle in ipairs(selectedSubtitles) do
+
+                    if subtitle.lang == subCode then
+
+                        firstLang = subtitle.lang
+                        break
+                    end
+                end
+
+                if firstLang then break end
             end
-
-            table.sort(selectedSubtitles, function(a, b)
-
-                local aLang = a.lang and a.lang:lower() or nil
-                local bLang = b.lang and b.lang:lower() or nil
-                local aP    = aLang and priorities[aLang] or 50
-                local bP    = bLang and priorities[bLang] or 50
-
-                return aP < bP
-            end)
-
-            local firstLang = selectedSubtitles[1].lang
 
             if firstLang then
 
-                firstLang = firstLang:lower()
+                h.removeItems(selectedSubtitles, function(_, val)
 
-                if priorities[firstLang] then
+                    if val.lang and val.lang == firstLang then return true end
 
-                    h.removeItems(selectedSubtitles, function(_, val)
-
-                        local sLang = val.lang and val.lang:lower() or nil
-
-                        if sLang and sLang == firstLang then return true end
-
-                        return false
-                    end, true)
-                end
+                    return false
+                end, true)
             end
 
             if #selectedSubtitles == 1 then return selectedSubtitles[1].id end
@@ -291,7 +288,7 @@ local function getSidByLanguage(configLangKey, langMap)
 
             local desiredWords = h.splitString(config.preferred_words)
 
-            if #desiredWords > 0 then
+            if next(desiredWords) ~= nil then
 
                 h.removeItems(selectedSubtitles, function(_, val)
 
@@ -339,8 +336,10 @@ end
 
 local function copySubtitleToTemp(subtitle, key)
 
+    local message    = ""
     local sourceFile = subtitle.path
     local targetFile = this.getPath("cache/"..key.."file")
+    local result
 
     if subtitle.ext == ".ass" then
 
@@ -353,161 +352,146 @@ local function copySubtitleToTemp(subtitle, key)
         end
     else
 
-        h.runCommand({"ffmpeg", "-i", sourceFile, "-c:s", "ass", targetFile})
+        result = h.runCommand({"ffmpeg", "-i", sourceFile, "-c:s", "ass", targetFile})
+
+        if result.status == -3 then message = "FFmpeg not installed." end
     end
 
-    return path.checkPath(targetFile)
+    return path.checkPath(targetFile), message
 end
 
 local function mergeSubtitles()
 
     local data = {
 
-        {path = this.getPath("cache/bottomfile"), style = "Primary",   subType = "bottom"},
-        {path = this.getPath("cache/topfile"),    style = "Secondary", subType = "top"}
+        {style = "Primary",   subType = "bottom", ready = false},
+        {style = "Secondary", subType = "top",    ready = false}
     }
-
     local styles = {}
     local lines  = {}
-    local scount = 0
 
     for _, v in ipairs(data) do
 
-        local content = path.readFile(v.path)
+        local sPath   = this.getPath("cache/"..v.subType.."file")
+        local content = path.readFile(sPath)
 
         if content then
 
-            local playResX, playResY, canResample
+            local shouldResample
             local italicStyles = {}
 
             if config.keep_ts == v.subType then
 
-                playResX    = content:match("PlayResX: (%d+)") or 0
-                playResY    = content:match("PlayResY: (%d+)") or 0
-                canResample = (tonumber(playResX) == 1920 and tonumber(playResY) == 1080) and false or true
+                local playResX, playResY = assline:resolution(content)
 
-                if canResample then resampler.setResolutions(playResX, playResY, 1920, 1080) end
+                shouldResample = (playResX == 1920 and playResY == 1080) and false or true
 
-                for style in content:gmatch("Style:[^\n]+") do
+                if shouldResample then resampler.setResolutions(playResX, playResY, 1920, 1080) end
 
-                    style = assline:new(style)
+                for style in assline:styles(content) do
 
-                    if style then
+                    if config.detect_italics and style.Italic then table.insert(italicStyles, style.Name) end
 
-                        if config.detect_italics and style.Italic then table.insert(italicStyles, style.Name) end
+                    style.Name = v.style..style.Name
 
-                        style.Name = v.style..style.Name
+                    if shouldResample then resampler.resampleStyle(style) end
 
-                        if canResample then
-
-                            style = resampler.resampleStyle(style)
-                        end
-
-                        table.insert(styles, style:raw())
-                    end
+                    table.insert(styles, style:raw())
                 end
             end
 
             local makeItalic, seen = false, {}
 
-            for line in content:gmatch("Dialogue:[^\n]+") do
+            for line in assline:lines(content) do
 
                 local prevStyle
 
-                line = assline:new(line)
+                if not v.ready then v.ready = true end
 
-                if line then
+                local deleteThis = false
 
-                    local deleteThis = false
+                if config.keep_ts == v.subType and line:isSign() then
 
-                    if config.keep_ts == v.subType and line:isSign() then
+                    line.Style = v.style..line.Style
 
-                        line.Style = v.style..line.Style
+                    if shouldResample then resampler.resampleDialogue(line) end
+                elseif not line.Text:isShape() then
 
-                        if canResample then
+                    local text = line.Text:stripped()
 
-                            line = resampler.resampleDialogue(line)
+                    if config.remove_repeating_lines then
+
+                        local sKey = tostring(line.Start)..tostring(line.End)
+
+                        if seen[sKey] and seen[sKey] == text then
+
+                            deleteThis = true
+                        else
+
+                            seen[sKey] = text
                         end
-                    elseif not line:isShape() then
-
-                        local text = line:strippedText()
-
-                        if config.remove_repeating_lines then
-
-                            local sKey = tostring(line.Start)..tostring(line.End)
-
-                            if seen[sKey] and seen[sKey] == text then
-
-                                deleteThis = true
-                            else
-
-                                seen[sKey] = text
-                            end
-                        end
-
-                        if not deleteThis and config.detect_italics then
-
-                            if prevStyle ~= line.Style and h.hasItem(italicStyles, line.Style) then
-
-                                makeItalic = true
-                            else
-
-                                makeItalic = false
-                            end
-
-                            makeItalic = makeItalic or hasItalic(line.Text)
-                        end
-
-                        if not deleteThis and config.remove_sdh_entries then
-
-                            text = sdhKiller(text)
-
-                            if text == "" then
-
-                                deleteThis = true
-                            end
-                        end
-
-                        if not deleteThis and config[v.subType.."_tags"] ~= "" then
-
-                            text = string.format("{%s}%s", config[v.subType.."_tags"], text)
-                        end
-
-                        if not deleteThis and makeItalic then
-
-                            text = string.format("{%s}%s", "\\i1", text):gsub("}{", "")
-                        end
-
-                        --for copy
-                        text = string.format("{*%s}%s", v.style:sub(1,1), text):gsub("}{", "")
-
-                        line.Layer = 0
-                        line.Style = v.style
-                        line.Text  = text
                     end
 
-                    if not deleteThis then table.insert(lines, line:raw()) end
+                    if not deleteThis and config.detect_italics then
 
-                    prevStyle = line.Style
+                        if prevStyle ~= line.Style and h.hasItem(italicStyles, line.Style) then
+
+                            makeItalic = true
+                        else
+
+                            makeItalic = false
+                        end
+
+                        makeItalic = makeItalic or hasItalic(line.Text.original)
+                    end
+
+                    if not deleteThis and config.remove_sdh_entries then
+
+                        text = sdhKiller(text)
+
+                        if text == "" then
+
+                            deleteThis = true
+                        end
+                    end
+
+                    if not deleteThis and config[v.subType.."_tags"] ~= "" then
+
+                        text = string.format("{%s}%s", config[v.subType.."_tags"], text)
+                    end
+
+                    if not deleteThis and makeItalic then
+
+                        text = string.format("{%s}%s", "\\i1", text):gsub("}{", "")
+                    end
+
+                    --for copy
+                    text = string.format("{*%s}%s", v.style:sub(1,1), text):gsub("}{", "")
+
+                    line.Layer = 0
+                    line.Style = v.style
+                    line.Text  = text
                 end
+
+                if not deleteThis then table.insert(lines, line:raw()) end
+
+                prevStyle = line.Style
             end
 
-            if #lines > 0 then scount = scount + 1 end
-
-            path.removeFile(v.path)
+            path.removeFile(sPath)
         end
     end
 
-    if scount ~= 2 then
+    if not (data[1].ready or data[2].ready) then
 
         h.notify("There is a missing or corrupted subtitle.", "mergesubtitles", "error", 30)
 
-        return false
+        return
     end
 
     local header = [[
 [Script Info]
-Title: New subtitles
+; Script generated by mpvdualsubtitles
 ScriptType: v4.00+
 WrapStyle: 0
 PlayResX: 1920
@@ -528,7 +512,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     header = header:gsub("<style1>", config.bottom_style:gsub("[^,]*:", ""))
     header = header:gsub("<style2>", config.top_style:gsub("[^,]*:", ""))
 
-    if #styles > 0 then
+    if next(styles) ~= nil then
 
         header = header:gsub("<extrastyles>", table.concat(styles, "\n"))
     else
@@ -537,11 +521,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     end
 
     path.createFile(this.getPath("cache/mergedfile"), header..table.concat(lines, "\n"))
-
-    return true
 end
-
-local mergeStart
 
 local function tryMerge()
 
@@ -557,6 +537,7 @@ local function tryMerge()
 
         this.merged   = this.subtitles[mp.get_property_number("sid")]
         local elapsed = mp.get_time() - mergeStart
+        mergeStart    = nil
 
         h.notify(string.format("Subtitles merged. Took %d seconds.", elapsed), "mergesubtitles", "info", 10)
     else
@@ -585,14 +566,14 @@ function this.merge()
 
         h.notify("Two subtitles are required to merge.", "mergesubtitles", "error")
 
-        return false
+        return
     end
 
-    if not this.bottom.textbased or not this.top.textbased then
+    if not (this.bottom.textbased and this.top.textbased) then
 
         h.notify("One of the selected subtitles is not text-based.", "mergesubtitles", "error")
 
-        return false
+        return
     end
 
     h.notify("Please wait...", "mergesubtitles", "info", 9999)
@@ -602,34 +583,38 @@ function this.merge()
     path.createDir(this.getPath("cache/merge"))
 
     local remainingSubtitles = 2
-    local copyError          = false
+    local cStatus, cErrorMessage
 
-    for _, value in ipairs({"bottom", "top"}) do
+    for _, k in ipairs({"bottom", "top"}) do
 
-        if this[value].external then
+        local subtitle = this[k]
 
-            if copySubtitleToTemp(this[value], value) then
+        if subtitle.external then
+
+            cStatus, cErrorMessage = copySubtitleToTemp(subtitle, k)
+
+            if cStatus then
 
                 remainingSubtitles = remainingSubtitles - 1
             else
 
-                copyError = true
+                break
             end
         end
     end
 
-    if copyError then
+    if cErrorMessage then
 
-        h.notify("Subtitles could not be copied.", "mergesubtitles", "error")
+        h.notify(cErrorMessage, "mergesubtitles", "error")
 
-        return false
+        return
     end
 
     if remainingSubtitles == 0 then
 
         tryMerge()
 
-        return true
+        return
     end
 
     local args = {}
@@ -661,21 +646,15 @@ function this.merge()
     table.insert(args, "-dn")
     table.insert(args, "-y")
 
-    local ffmpegCommand = {
+    local onSubtitleFail = function(result, status)
 
-        name           = "subprocess",
-        capture_stdout = true,
-        capture_stderr = true,
-        playback_only  = false,
-        args           = args
-    }
+        if status == -3 then
 
-    local onSubtitleFail = function (result)
-
-        if string.match(result, "No such file or directory") then
+            h.notify("FFmpeg not installed.", "mergesubtitles", "error")
+        elseif string.find(result, "No such file or directory") then
 
             h.notify("No such file or directory.", "mergesubtitles", "error")
-        elseif string.match(result, "Failed to set value") then
+        elseif string.find(result, "Failed to set value") then
 
             h.notify("Wrong subtitle id.", "mergesubtitles", "error")
         else
@@ -685,16 +664,14 @@ function this.merge()
         end
     end
 
-    h.runAsync(ffmpegCommand, tryMerge, onSubtitleFail)
-
-    return true
+    h.runCommandAsync(args, tryMerge, onSubtitleFail)
 end
 
 function this.isMergedSelected()
 
     local currentSid = mp.get_property_number("sid", 0)
 
-    return (this.merged and currentSid == this.merged.id)
+    return this.merged and currentSid == this.merged.id
 end
 
 function this.getPath(key)
@@ -736,14 +713,11 @@ function this.getPath(key)
     return nil
 end
 
-function this.updateList(trackcount)
+function this.updateList(currentTrackCount)
 
-    if trackcount ~= this.prevTrackCount then
+    if currentTrackCount ~= this.prevTrackCount then
 
-        local firstUpdate = (this.prevTrackCount == 0)
-        this.subtitles    = getSubtitleList()
-
-        if not firstUpdate then h.log("Subtitle list updated") end
+        this.subtitles = getSubtitleList()
     end
 end
 
@@ -832,15 +806,15 @@ function this.toggle(bottom, top)
         mp.set_property("sub-ass-style-overrides", overrides)
     else
 
-        mp.set_property_native("sub-visibility",           (bottom == 1) and "yes" or "no")
-        mp.set_property_native("secondary-sub-visibility", (top == 1)    and "yes" or "no")
+        mp.set_property_native("sub-visibility",           bottom == 1 and "yes" or "no")
+        mp.set_property_native("secondary-sub-visibility", top == 1    and "yes" or "no")
     end
 end
 
 function this.set(bottomSid, topSid)
 
-    this.bottom = (bottomSid > 0) and this.subtitles[bottomSid] or nil
-    this.top    = (topSid > 0)    and this.subtitles[topSid]    or nil
+    this.bottom = bottomSid > 0 and this.subtitles[bottomSid] or nil
+    this.top    = topSid > 0    and this.subtitles[topSid]    or nil
 end
 
 function this.display()

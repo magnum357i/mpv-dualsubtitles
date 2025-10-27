@@ -4,96 +4,101 @@ https://github.com/magnum357i/mpv-dualsubtitles/
 
 ╔════════════════════════════════╗
 ║        MPV dualsubtitles       ║
-║              v2.3.1            ║
+║              v2.3.2            ║
 ╚════════════════════════════════╝
 
 ## Required ##
-FFmpeg (for subtitle merging)
+FFmpeg (for merging)
 
 ## Codes ##
 Language list: https://en.wikipedia.org/wiki/List_of_ISO_639_language_codes
-Country list: https://en.wikipedia.org/wiki/List_of_ISO_3166_country_codes
+Region list: https://en.wikipedia.org/wiki/List_of_ISO_3166_country_codes
 
 ## CSV Data Source ##
 https://github.com/datasets/language-codes/blob/main/data/language-codes-3b2.csv
 
 ]]
 
-local mp       = require "mp"
-local options  = require "mp.options"
-local h        = require "helpers"
-local subtitle = require "dualsubtitles"
+local mp      = require "mp"
+local options = require "mp.options"
+local h       = require "helpers"
+local dual    = require "dualsubtitles"
 
 config = {
 
     --auto select
-    top_languages            = "tr",
-    bottom_languages         = "en:us,ja",
-    preferred_words          = "",
-    rejected_words           = "sign,song",
-    use_top_as_bottom        = true,
-
+    top_languages          = "tr",
+    bottom_languages       = "en:us,ja",
+    preferred_words        = "",
+    rejected_words         = "sign,song",
+    use_top_as_bottom      = true,
 
     --hover for secondary
-    secondary_on_hover       = false,
-    hover_height_percent     = 50,
-
+    secondary_on_hover     = false,
+    hover_height_percent   = 50,
 
     --merged subtitle
-    top_style                = "fn:Segoe UI Semibold,fs:60,1c:&H0000DEFF,2c:&H000000FF,3c:&H00000000,4c:&H00000000,b:0,i:0,u:0,s:0,sx:100,sy:100,fsp:0,frz:0,bs:1,bord:4,shad:0,an:8,ml:0,mr:0,mv:40,enc:1",
-    bottom_style             = "fn:Calibri,fs:60,1c:&H00FFFFFF,2c:&H000000FF,3c:&H00000000,4c:&H00000000,b:0,i:0,u:0,s:0,sx:100,sy:100,fsp:0,frz:0,bs:1,bord:1.5,shad:0,an:2,ml:0,mr:0,mv:40,enc:1",
-    top_tags                 = "",
-    bottom_tags              = "\\blur4",
-
-    detect_italics           = true,
-    keep_ts                  = "none", --bottom, top, none
-    remove_sdh_entries       = false,
-    remove_repeating_lines   = false,
-
+    top_style              = "fn:Segoe UI Semibold,fs:60,1c:&H0000DEFF,2c:&H000000FF,3c:&H00000000,4c:&H00000000,b:0,i:0,u:0,s:0,sx:100,sy:100,fsp:0,frz:0,bs:1,bord:4,shad:0,an:8,ml:0,mr:0,mv:40,enc:1",
+    bottom_style           = "fn:Calibri,fs:60,1c:&H00FFFFFF,2c:&H000000FF,3c:&H00000000,4c:&H00000000,b:0,i:0,u:0,s:0,sx:100,sy:100,fsp:0,frz:0,bs:1,bord:1.5,shad:0,an:2,ml:0,mr:0,mv:40,enc:1",
+    top_tags               = "",
+    bottom_tags            = "\\blur4",
+    detect_italics         = true,
+    keep_ts                = "none", --bottom, top, none
+    remove_sdh_entries     = false,
+    remove_repeating_lines = false,
 
     --misc
-    expand_subtitle_search   = false,
-    copy_format              = "(%s) %s"
+    expand_subtitle_search = false,
+    copy_format            = "(%s) %s"
 }
 
 options.read_options(config)
 
+config.top_languages    = config.top_languages:lower():gsub("_", "-")
+config.bottom_languages = config.bottom_languages:lower():gsub("_", "-")
+
 local hideMode = 0
-local cSubs
+local cSubs    = {bottom = {}, top = {}}
 local timer
 
 local function setSubtitles()
 
     local ok
 
-    ok = subtitle.loadMerged()
+    ok = dual.loadMerged()
 
     if ok then return end
 
-    ok = subtitle.load()
+    ok = dual.load()
 
     if not ok then return end
 
-    if config.use_top_as_bottom and not subtitle.bottom and subtitle.top then
+    if config.use_top_as_bottom and not dual.bottom and dual.top then
 
-        subtitle.set(subtitle.top.id, 0)
+        dual.set(dual.top.id, 0)
     end
 
-    if config.secondary_on_hover and subtitle.bottom and subtitle.top then
+    if config.secondary_on_hover and dual.bottom and dual.top then
 
-        subtitle.toggle(1, 0)
+        dual.toggle(1, 0)
     end
 
-    subtitle.display()
+    dual.display()
 
-    h.log(string.format("bottom %s, top %s", subtitle.bottom and subtitle.bottom.id or "not set", subtitle.top and subtitle.top.id or "not set"))
+    h.log(string.format("bottom %s, top %s", dual.bottom and dual.bottom.id or "not set", dual.top and dual.top.id or "not set"))
+end
+
+local function mergeSubtitles()
+
+    dual.loadDefaults()
+    dual.merge()
 end
 
 local function deleteMergedFile()
 
     local ok
 
-    ok = subtitle.deleteMerged()
+    ok = dual.deleteMerged()
 
     if ok then
 
@@ -104,15 +109,9 @@ local function deleteMergedFile()
     end
 end
 
-local function mergeSubtitles()
-
-    subtitle.loadDefaults()
-    subtitle.merge()
-end
-
 local function swapSubtitles()
 
-    if subtitle.isMergedSelected() then
+    if dual.isMergedSelected() then
 
         local overrideMode = mp.get_property("sub-ass-override", "")
 
@@ -127,12 +126,12 @@ local function swapSubtitles()
 
         if not string.find(overrides, "Primary.Alignment=", 1, true) then
 
-            overrides = subtitle.addStyleOverride(overrides, "Primary",   "Alignment", alignments["8"])
-            overrides = subtitle.addStyleOverride(overrides, "Secondary", "Alignment", alignments["2"])
+            overrides = dual.addStyleOverride(overrides, "Primary",   "Alignment", alignments["8"])
+            overrides = dual.addStyleOverride(overrides, "Secondary", "Alignment", alignments["2"])
         else
 
-            overrides = subtitle.addStyleOverride(overrides, "Primary",   "Alignment", nil)
-            overrides = subtitle.addStyleOverride(overrides, "Secondary", "Alignment", nil)
+            overrides = dual.addStyleOverride(overrides, "Primary",   "Alignment", nil)
+            overrides = dual.addStyleOverride(overrides, "Secondary", "Alignment", nil)
         end
 
         mp.set_property("sub-ass-style-overrides", overrides)
@@ -140,20 +139,20 @@ local function swapSubtitles()
         return
     end
 
-    subtitle.loadDefaults()
+    dual.loadDefaults()
 
-    if subtitle.bottom and subtitle.top then
+    if dual.bottom and dual.top then
 
-        local tempBottomSid = subtitle.bottom.id
-        local tempTopSid    = subtitle.top.id
+        local tempBottomSid = dual.bottom.id
+        local tempTopSid    = dual.top.id
 
-        subtitle.set(0, 0)
-        subtitle.display()
+        dual.set(0, 0)
+        dual.display()
 
-        subtitle.set(tempTopSid, tempBottomSid)
-        subtitle.display()
+        dual.set(tempTopSid, tempBottomSid)
+        dual.display()
 
-        mp.osd_message(string.format("Top: %s\nBottom: %s", tostring(subtitle.top), tostring(subtitle.bottom)))
+        mp.osd_message(string.format("Top: %s\nBottom: %s", tostring(dual.top), tostring(dual.bottom)))
     else
 
         mp.osd_message("Subtitles not swapped")
@@ -166,21 +165,21 @@ local function hideSubtitles()
 
         hideMode = hideMode + 1
 
-        subtitle.toggle(1,0)
+        dual.toggle(1,0)
 
         mp.osd_message("Only the bottom subtitle visible")
     elseif hideMode == 1 then
 
         hideMode = hideMode + 1
 
-        subtitle.toggle(0,0)
+        dual.toggle(0,0)
 
         mp.osd_message("Subtitles hidden")
     elseif hideMode == 2 then
 
         hideMode = 0
 
-        subtitle.toggle(1,1)
+        dual.toggle(1,1)
 
         mp.osd_message("Subtitles visible")
     end
@@ -188,12 +187,10 @@ end
 
 local function copySubtitlesOnPress()
 
-    cSubs = {bottom = {}, top = {}}
-
     mp.set_property_bool("pause", false)
     mp.osd_message("▶ Collecting subtitles...", 9999)
 
-    local merged = subtitle.isMergedSelected()
+    local merged = dual.isMergedSelected()
 
     local parseMerged = function (text)
 
@@ -260,7 +257,7 @@ local function copySubtitlesOnUp()
 
     if #cSubs.bottom > 0 or #cSubs.top > 0 then
 
-        subtitle.loadDefaults()
+        dual.loadDefaults()
 
         local sanitize = function (text)
 
@@ -277,7 +274,7 @@ local function copySubtitlesOnUp()
 
         if #cSubs.bottom > 0 and #cSubs.top > 0 then
 
-            result = string.format(config.copy_format.."\n"..config.copy_format, (subtitle.top and subtitle.top.lang or "S"), table.concat(cSubs.top, " "), (subtitle.bottom and subtitle.bottom.lang or "P"), table.concat(cSubs.bottom, " "))
+            result = string.format(config.copy_format.."\n"..config.copy_format, (dual.top and dual.top.lang or "S"), table.concat(cSubs.top, " "), (dual.bottom and dual.bottom.lang or "P"), table.concat(cSubs.bottom, " "))
         else
 
             result = #cSubs.top > 0 and table.concat(cSubs.top, " ") or table.concat(cSubs.bottom, " ")
@@ -290,11 +287,14 @@ local function copySubtitlesOnUp()
 
         h.notify("No subtitles on screen.", "copysubtitles", "error")
     end
+
+    h.clearTable(cSubs.bottom)
+    h.clearTable(cSubs.top)
 end
 
 local function updateSubtitleList(_, tracks)
 
-    subtitle.updateList(#tracks)
+    dual.updateList(#tracks)
 end
 
 local function cycleSecondary(mode)
@@ -365,17 +365,17 @@ if config.secondary_on_hover then
 
     mp.observe_property("mouse-pos", "native", function(_, mouse)
 
-        if mp.get_property_number("sid", 0) == 0 or not subtitle.isMergedSelected() and mp.get_property_number("secondary-sid", 0) == 0 then return end
+        if mp.get_property_number("sid", 0) == 0 or not dual.isMergedSelected() and mp.get_property_number("secondary-sid", 0) == 0 then return end
 
         local windowHeight = mp.get_property_number("osd-height")
         local hoverArea    = (windowHeight * config.hover_height_percent) / 100
 
         if mouse.y >= 0 and mouse.y <= hoverArea then
 
-            subtitle.toggle(1,1)
+            dual.toggle(1,1)
         else
 
-            subtitle.toggle(1,0)
+            dual.toggle(1,0)
         end
     end)
 end

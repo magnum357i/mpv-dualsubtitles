@@ -1,6 +1,5 @@
-local utils = require "mp.utils"
-local this  = {}
-
+local utils    = require "mp.utils"
+local this     = {}
 local assStart = mp.get_property_osd("osd-ass-cc/0")
 local assStop  = mp.get_property_osd("osd-ass-cc/1")
 
@@ -36,7 +35,7 @@ end
 
 function this.notify(msg,errType,level,duration,silent)
 
-    duration = duration and duration or 5
+    duration = duration or 5
 
     mp.msg[level](msg)
 
@@ -55,10 +54,10 @@ function this.notify(msg,errType,level,duration,silent)
     if not silent then
 
         local output = ""
-        output = output..string.format("{%s\\b1}", colors[level] and "\\c"..colors[level] or "")
-        output = output..string.format("[dualsubtitles:%s]{\\b0} ", errType)
-        output = output..(headers[level] and string.format("%s! ", headers[level]) or "")
-        output = output..msg
+        output       = output..string.format("{%s\\b1}", colors[level] and "\\c"..colors[level] or "")
+        output       = output..string.format("[dualsubtitles:%s]{\\b0} ", errType)
+        output       = output..(headers[level] and string.format("%s! ", headers[level]) or "")
+        output       = output..msg
 
         mp.osd_message(assStart..output..assStop, duration)
     end
@@ -70,7 +69,7 @@ function this.splitString(str, splitter)
 
     local list = {}
 
-    for val in string.gmatch(str, "([^"..splitter.."]+)") do
+    for val in str:gmatch("([^"..splitter.."]+)") do
 
         table.insert(list, val)
     end
@@ -98,17 +97,26 @@ function this.searchStrings(value, items)
     return false
 end
 
-function this.runAsync(cmd, handleSuccess, handleFail)
+function this.runCommandAsync(args, handleSuccess, handleFail)
 
-    local proc = mp.command_native_async(cmd, function(_, result, _)
+    return mp.command_native_async({
+
+        name           = 'subprocess',
+        playback_only  = false,
+        capture_stdout = true,
+        capture_stderr = true,
+        args           = args
+    },
+
+    function(_, result, _)
 
         if result.status == 0 then
 
             handleSuccess()
         else
 
-            this.log(cmd.args)
-            handleFail(result.stderr)
+            this.log(args)
+            handleFail(result.stderr, result.status)
         end
     end)
 end
@@ -201,6 +209,16 @@ function this.removeItems(t, cond, keepMatching)
             if keepMatching and not itemsToDelete[i] or not keepMatching and itemsToDelete[i] then table.remove(t, i) end
         end
     end
+end
+
+function this.isEmpty(str)
+
+    return str:gsub("%s+", "") == ""
+end
+
+function this.clearTable(t)
+
+    for k in pairs(t) do t[k] = nil end
 end
 
 return this
