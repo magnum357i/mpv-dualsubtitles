@@ -1,4 +1,5 @@
 # mpv-dualsubtitles
+
 Dual subtitles plugin for MPV
 
 ![Example for Dual Subtitles](https://github.com/magnum357i/mpv-dualsubtitles/blob/main/mpv-shot0001.jpg)
@@ -9,13 +10,33 @@ Dual subtitles plugin for MPV
 
 # Installation
 
-### Windows 10
+### Manual
+
+Place `scripts` and `script-opts` folders into your config directory.
+
+| OS        | Location         |
+|-----------|------------------|
+| Windows   | `%appdata%/mpv/` |
+| GNU/Linux | `~/.config/mpv/` |
+
+### Automatic
+
+To install or update via command line:
+
+#### Windows 10
 
 ```powershell
 powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/magnum357i/mpv-dualsubtitles/HEAD/installers/windows.ps1 | iex"
 ```
 
+#### Linux
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/magnum357i/mpv-dualsubtitles/HEAD/installers/linux.sh | sh
+```
+
 # Key Bindings
+
 | shortcut          | description                               |
 |-------------------|-------------------------------------------|
 | <kbd>k</kbd>      | switch secondary subtitle track           |
@@ -31,6 +52,7 @@ powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/mag
 # Auto-Selection
 
 ### How Does It Work?
+
 1. Get subtitles based on preferred languages. **[top_languages or bottom_languages]**
 2. Skip forced and ignored subtitles. **[rejected_words]**
 3. Remove non-preferred subtitles. **[preferred_words]**
@@ -42,6 +64,7 @@ powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/mag
 Forced subtitles are never selected when full subtitles are available, even if they are not properly marked. And hearing-impaired subtitles are better than no subtitle.
 
 ### Input Tag
+
 You don’t have to specify every variation of a language. Just use the two-letter code and the rest will be created automatically. For example:
 
 | Tag          | Result                                                                    |
@@ -57,6 +80,7 @@ So, the two-letter language code is enough to select all subtitles in that langu
 > Don’t enter the same language (`ru:Cyrl-RU,ru:Latn-RU`) more than once because some features may not work. If you really need to do this, enter: `ru:Cyrl-RU:Latn-RU`
 
 ### Code Lists
+
 - [Language](https://en.wikipedia.org/wiki/List_of_ISO_639_language_codes) (Set 1 Column)
 - [Region](https://en.wikipedia.org/wiki/List_of_ISO_3166_country_codes) (A-2 Column)
 
@@ -140,6 +164,7 @@ remove_repeating_lines=yes
 # External Subtitles
 
 ### Naming
+
 External subtitles loaded on startup can be automatically selected based on your preferred languages. Make sure the subtitle filename ends with a language code.
 
 | Accepted Filename Formats for MPV |
@@ -148,7 +173,6 @@ External subtitles loaded on startup can be automatically selected based on your
 | `movie.eng.srt`                   |
 
 *Naming your subtitles this way will make MPV recognize their languages.*
-
 
 | Accepted Filename Formats for My Plugin |
 |-----------------------------------------|
@@ -183,6 +207,7 @@ expand_subtitle_search=yes
 ```
 
 # Merging Subtitles
+
 Merging subtitles allows you to have more styling options.
 
 ![Example for Merging Subtitles](https://github.com/magnum357i/mpv-dualsubtitles/blob/main/mpv-shot0002.jpg)
@@ -191,12 +216,14 @@ Merging subtitles allows you to have more styling options.
 > Merged subtitles are a single subtitle file, so secondary options no longer apply. Even so, all features provided by this plugin, such as **swap** and **hide**, still apply to it.
 
 # Copy Subtitles
+
 Hold the shortcut key to copy on-screen subtitles to the clipboard. Works with merged subtitles as well.
 
 # Related Plugins
 - [sidebarsubtitles](https://github.com/magnum357i/mpv-sidebarsubtitles)
 
 # FAQ
+
 **- How do I change the vertical position of the top subtitle permanently? / How can I make both subtitles have equal margins?**
 
 There is no margin option for secondary subtitles in MPV, but `secondary-sub-pos` can be used instead:
