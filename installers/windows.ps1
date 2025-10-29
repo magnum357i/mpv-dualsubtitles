@@ -1,23 +1,9 @@
-	$isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+	function Remove-IfExists {
 
-	if (!($isAdmin)) {
+		param(
 
-    	Write-Host "Please run this script as administrator."
-    	Exit 1
-	}
-
-	$requiredCommands = @("tar", "curl")
-
-	foreach ($cmd in $requiredCommands) {
-
-    	if (!(Get-Command $cmd -ErrorAction SilentlyContinue)) {
-
-        	Write-Host "$($cmd): command not found"
-        	Exit 1
-    	}
-	}
-
-	function Remove-IfExists($p) {
+			[string] $p
+		)
 
 		if (Test-Path $p) {
 
@@ -25,7 +11,12 @@
 		}
 	}
 
-	function Create-IfNotExists($p) {
+	function Create-IfNotExists {
+
+		param(
+
+			[string] $p
+		)
 
 		if (!(Test-Path $p)) {
 
@@ -33,103 +24,97 @@
 		}
 	}
 
-	function Download-Repo($r, $a, $d) {
+	function Download-Repo {
+
+		param(
+
+			[string] $repo,
+			[string] $archive,
+			[string] $temp
+		)
+
+		$tempPath = "$env:TEMP\$temp"
+
+		Remove-IfExists -p $tempPath
 
 		if (Get-Command git -ErrorAction SilentlyContinue) {
 
-			git clone --depth 1 $r $d
+			git clone --depth 1 $repo $tempPath
 		}
 		else {
 
 			Write-Host "Downloading..."
-			New-Item -ItemType Directory -Path $d > $null
-			curl -# -L $a -o "$d\main.zip" > $null
+			New-Item -ItemType Directory -Path $tempPath > $null
+			Invoke-WebRequest -Uri $archive -OutFile "$tempPath\main.zip" > $null
 
-			if (Test-Path "$d\main.zip") {
+			if (Test-Path "$tempPath\main.zip") {
 
 				Write-Host "Extracting..."
-				tar -xf "$d\main.zip" -C $d > $null
-				Move-Item "$d\*-main\*" $d -Force > $null
-				Remove-Item "$d\*-main" -Force > $null
-				Remove-Item "$d\main.zip" -Force > $null
+				Expand-Archive "$tempPath\main.zip" -DestinationPath $tempPath > $null
+				Move-Item "$tempPath\*-main\*" "$tempPath" -Force > $null
+				Remove-Item "$tempPath\*-main" -Force > $null
+				Remove-Item "$tempPath\main.zip" -Force > $null
 			}
 		}
 	}
 
-	try {
-		$ffmpeg = @{
+	function Install-Plugin {
 
-			path = "C:\FFmpeg"
-			url  = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-git-full.7z"
-		}
+		param(
 
-		Write-Host "[FFMPEG]"
-		Remove-IfExists -p $ffmpeg.path
-		Write-Host "Downloading..."
-		New-Item -ItemType Directory -Path $ffmpeg.path > $null
-		curl -# -L $ffmpeg.url -o "$($ffmpeg.path)\ffmpeg.7z" > $null
+			[string] $temp,
+			[string] $name
+		)
 
-		if (Test-Path "$($ffmpeg.path)\ffmpeg.7z") {
+		if (Test-Path "$env:TEMP\$temp\scripts\$name\main.lua") {
 
-			Write-Host "Extracting..."
-			tar -xf "$($ffmpeg.path)\ffmpeg.7z" -C $ffmpeg.path > $null
-			Move-Item "$($ffmpeg.path)\*build\bin\*" $ffmpeg.path -Force > $null
-			Remove-Item "$($ffmpeg.path)\*build" -Recurse -Force > $null
-			Remove-Item "$($ffmpeg.path)\ffmpeg.7z" -Force > $null
-
-			if (Test-Path "$($ffmpeg.path)\ffmpeg.exe") {
-
-				$envPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
-
-				if ($envPath -notmatch [Regex]::Escape($ffmpeg.path)) {
-
-					Write-Host "Addding to PATH..."
-    				[Environment]::SetEnvironmentVariable("Path", "$envPath;$($ffmpeg.path)", "Machine")
-				}
-			}
+			Remove-IfExists -p "$env:APPDATA\mpv\scripts\$name"
+			Remove-IfExists -p "$env:APPDATA\mpv\script-opts\$name.conf"
+			Create-IfNotExists -p "$env:APPDATA\mpv\scripts\$name"
+			Create-IfNotExists -p "$env:APPDATA\mpv\script-opts"
+			Move-Item "$env:TEMP\$temp\scripts\$name\*" "$env:APPDATA\mpv\scripts\$name" -Force > $null
+			Move-Item "$env:TEMP\$temp\script-opts\$name.conf" "$env:APPDATA\mpv\script-opts" -Force > $null
+			Remove-Item "$env:TEMP\$temp" -Recurse -Force > $null
 		}
 		else {
 
-			Write-Host "Failed to download"
+			Write-Host "Files not found"
 			Exit 1
 		}
 	}
-	catch {
 
-		Write-Host "FFmpeg not installed: $($_.Exception.Message)"
-		Exit 1
+	function Install-FFmpeg {
+
+		winget install --id Gyan.FFmpeg -e
 	}
 
-	Write-Host "Done!"
+    if (!(Get-Command "ffmpeg" -ErrorAction SilentlyContinue)) {
+
+		try {
+
+			Write-Host "[FFMPEG]"
+			Install-FFmpeg
+		}
+		catch {
+
+			Write-Host "FFmpeg not installed: $($_.Exception.Message)"
+			Exit 1
+		}
+    }
+
+	$scriptDir = "dualsubtitles"
+	$tempDir   = "gitmpvdualsubtitles"
+	$gitLinks  = @{
+
+		repo    = "https://github.com/magnum357i/mpv-dualsubtitles"
+		archive = "https://github.com/magnum357i/mpv-dualsubtitles/archive/refs/heads/main.zip"
+	}
 
 	try {
-
-		$scriptName = "dualsubtitles"
-		$tempDir    = "gitmpvdualsubtitles"
-		$gitLinks   = @{
-
-			repo    = "https://github.com/magnum357i/mpv-dualsubtitles"
-			archive = "https://github.com/magnum357i/mpv-dualsubtitles/archive/refs/heads/main.zip"
-		}
 
 		Write-Host "[PLUGIN]"
-		Remove-IfExists -p "$env:TEMP\$tempDir"
-		Download-Repo -r $gitLinks.repo -a $gitLinks.archive -d "$env:TEMP\$tempDir"
-
-		if (Test-Path "$env:TEMP\$tempDir\scripts\$scriptName\main.lua") {
-
-			Create-IfNotExists -p "$env:APPDATA\mpv\scripts"
-			Create-IfNotExists -p "$env:APPDATA\mpv\script-opts"
-			Remove-IfExists -p "$env:APPDATA\mpv\scripts\$scriptName"
-			Move-Item -Path "$env:TEMP\$tempDir\scripts\$scriptName" -Destination "$env:APPDATA\mpv\scripts\$scriptName" -Force > $null
-			Move-Item -Path "$env:TEMP\$tempDir\script-opts\dualsubtitles.conf" -Destination "$env:APPDATA\mpv\script-opts" -Force > $null
-			Remove-Item "$env:TEMP\$tempDir" -Recurse -Force > $null
-		}
-		else {
-
-			Write-Host "Failed to download"
-			Exit 1
-		}
+		Download-Repo -repo $gitLinks.repo -archive $gitLinks.archive -temp $tempDir
+		Install-Plugin -temp $tempDir -name $scriptDir
 	}
 	catch {
 
@@ -137,6 +122,9 @@
 		Exit 1
 	}
 
+	if ($LASTEXITCODE -ne 0) {
+
+    	Exit 1
+	}
+
 	Write-Host "Done!"
-	Write-Host "Finished!"
-	Exit

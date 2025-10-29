@@ -7,6 +7,14 @@ Dual subtitles plugin for MPV
 
 - `FFmpeg` (for merging)
 
+# Installation
+
+### Windows 10
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/magnum357i/mpv-dualsubtitles/HEAD/installers/windows.ps1 | iex"
+```
+
 # Key Bindings
 | shortcut          | description                               |
 |-------------------|-------------------------------------------|
