@@ -29,11 +29,19 @@ To install or update via command line:
 powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/magnum357i/mpv-dualsubtitles/HEAD/installers/windows.ps1 | iex"
 ```
 
+> [!NOTE]
+> `winget` is used to install `ffmpeg`. This step is skipped if `ffmpeg` is installed.
+
 #### Linux
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/magnum357i/mpv-dualsubtitles/HEAD/installers/linux.sh | sh
 ```
+
+<br/>
+<br/>
+
+*Remember, your settings will be reset.*
 
 # Key Bindings
 

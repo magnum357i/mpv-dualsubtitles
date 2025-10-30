@@ -70,9 +70,9 @@
 
 			Remove-IfExists -p "$env:APPDATA\mpv\scripts\$name"
 			Remove-IfExists -p "$env:APPDATA\mpv\script-opts\$name.conf"
-			Create-IfNotExists -p "$env:APPDATA\mpv\scripts\$name"
+			Create-IfNotExists -p "$env:APPDATA\mpv\scripts"
 			Create-IfNotExists -p "$env:APPDATA\mpv\script-opts"
-			Move-Item "$env:TEMP\$temp\scripts\$name\*" "$env:APPDATA\mpv\scripts\$name" -Force > $null
+			Move-Item "$env:TEMP\$temp\scripts\$name" "$env:APPDATA\mpv\scripts" -Force > $null
 			Move-Item "$env:TEMP\$temp\script-opts\$name.conf" "$env:APPDATA\mpv\script-opts" -Force > $null
 			Remove-Item "$env:TEMP\$temp" -Recurse -Force > $null
 		}
@@ -88,11 +88,16 @@
 		winget install --id Gyan.FFmpeg -e
 	}
 
-    if (!(Get-Command "ffmpeg" -ErrorAction SilentlyContinue)) {
+	Write-Host "[FFMPEG]"
+
+    if (Get-Command ffmpeg -ErrorAction SilentlyContinue) {
+
+		Write-Host "FFmpeg is OK"
+	}
+	else {
 
 		try {
 
-			Write-Host "[FFMPEG]"
 			Install-FFmpeg
 		}
 		catch {
@@ -110,9 +115,10 @@
 		archive = "https://github.com/magnum357i/mpv-dualsubtitles/archive/refs/heads/main.zip"
 	}
 
+	Write-Host "[PLUGIN]"
+
 	try {
 
-		Write-Host "[PLUGIN]"
 		Download-Repo -repo $gitLinks.repo -archive $gitLinks.archive -temp $tempDir
 		Install-Plugin -temp $tempDir -name $scriptDir
 	}
