@@ -23,7 +23,7 @@ Place `scripts` and `script-opts` folders into your config directory.
 
 To install or update via command line:
 
-#### Windows 10
+#### Windows 10 (CMD)
 
 ```powershell
 powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/magnum357i/mpv-dualsubtitles/HEAD/installers/windows.ps1 | iex"
@@ -37,11 +37,6 @@ powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/mag
 ```bash
 curl -fsSL https://raw.githubusercontent.com/magnum357i/mpv-dualsubtitles/HEAD/installers/linux.sh | sh
 ```
-
-<br/>
-<br/>
-
-*Remember, your settings will be reset.*
 
 # Key Bindings
 

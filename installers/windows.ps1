@@ -1,136 +1,124 @@
-	function Remove-IfExists {
 
-		param(
+$ErrorActionPreference = "Stop"
 
-			[string] $p
-		)
+$pluginName = "dualsubtitles"
+$tempDir    = "gitmpv$pluginName"
+$repoLink   = "https://github.com/magnum357i/mpv-dualsubtitles"
 
-		if (Test-Path $p) {
+function Path-RemoveIfExists {
 
-			Remove-Item $p -Force -Recurse > $null
-		}
-	}
+	param([string] $p)
 
-	function Create-IfNotExists {
+	if (Test-Path $p) { Remove-Item $p -Force -Recurse > $null }
+}
 
-		param(
+function Path-CreateDirIfNotExists {
 
-			[string] $p
-		)
+	param([string] $p)
 
-		if (!(Test-Path $p)) {
+	if (!(Test-Path $p)) { New-Item -ItemType Directory -Path $p > $null }
+}
 
-			New-Item -ItemType Directory -Path $p > $null
-		}
-	}
+function Download-Repo {
 
-	function Download-Repo {
+	param([string] $url, [string] $temp)
 
-		param(
+	$tempPath = "$env:TEMP\$temp"
 
-			[string] $repo,
-			[string] $archive,
-			[string] $temp
-		)
+	Path-RemoveIfExists -p $tempPath
 
-		$tempPath = "$env:TEMP\$temp"
+	if (Get-Command git -ErrorAction SilentlyContinue) {
 
-		Remove-IfExists -p $tempPath
-
-		if (Get-Command git -ErrorAction SilentlyContinue) {
-
-			git clone --depth 1 $repo $tempPath
-		}
-		else {
-
-			Write-Host "Downloading..."
-			New-Item -ItemType Directory -Path $tempPath > $null
-			Invoke-WebRequest -Uri $archive -OutFile "$tempPath\main.zip" > $null
-
-			if (Test-Path "$tempPath\main.zip") {
-
-				Write-Host "Extracting..."
-				Expand-Archive "$tempPath\main.zip" -DestinationPath $tempPath > $null
-				Move-Item "$tempPath\*-main\*" "$tempPath" -Force > $null
-				Remove-Item "$tempPath\*-main" -Force > $null
-				Remove-Item "$tempPath\main.zip" -Force > $null
-			}
-		}
-	}
-
-	function Install-Plugin {
-
-		param(
-
-			[string] $temp,
-			[string] $name
-		)
-
-		if (Test-Path "$env:TEMP\$temp\scripts\$name\main.lua") {
-
-			Remove-IfExists -p "$env:APPDATA\mpv\scripts\$name"
-			Remove-IfExists -p "$env:APPDATA\mpv\script-opts\$name.conf"
-			Create-IfNotExists -p "$env:APPDATA\mpv\scripts"
-			Create-IfNotExists -p "$env:APPDATA\mpv\script-opts"
-			Move-Item "$env:TEMP\$temp\scripts\$name" "$env:APPDATA\mpv\scripts" -Force > $null
-			Move-Item "$env:TEMP\$temp\script-opts\$name.conf" "$env:APPDATA\mpv\script-opts" -Force > $null
-			Remove-Item "$env:TEMP\$temp" -Recurse -Force > $null
-		}
-		else {
-
-			Write-Host "Files not found"
-			Exit 1
-		}
-	}
-
-	function Install-FFmpeg {
-
-		winget install --id Gyan.FFmpeg -e
-	}
-
-	Write-Host "[FFMPEG]"
-
-    if (Get-Command ffmpeg -ErrorAction SilentlyContinue) {
-
-		Write-Host "FFmpeg is OK"
+		Write-Host "Cloning..."
+		git clone --depth 1 --quiet $url $tempPath 2>&1
 	}
 	else {
 
-		try {
+		Write-Host "Downloading..."
+		New-Item -ItemType Directory -Path $tempPath > $null
+		Invoke-WebRequest -Uri "$url/archive/refs/heads/main.zip" -OutFile "$tempPath\main.zip" > $null
 
-			Install-FFmpeg
+		if (Test-Path "$tempPath\main.zip") {
+
+			Write-Host "Extracting..."
+			Expand-Archive "$tempPath\main.zip" -DestinationPath $tempPath > $null
+			Move-Item "$tempPath\*-main\*" $tempPath -Force > $null
+			Remove-Item "$tempPath\*-main" -Force > $null
+			Remove-Item "$tempPath\main.zip" -Force > $null
 		}
-		catch {
+		else {
 
-			Write-Host "FFmpeg not installed: $($_.Exception.Message)"
-			Exit 1
+			throw "Files not downloaded"
 		}
-    }
-
-	$scriptDir = "dualsubtitles"
-	$tempDir   = "gitmpvdualsubtitles"
-	$gitLinks  = @{
-
-		repo    = "https://github.com/magnum357i/mpv-dualsubtitles"
-		archive = "https://github.com/magnum357i/mpv-dualsubtitles/archive/refs/heads/main.zip"
 	}
+}
 
-	Write-Host "[PLUGIN]"
+function Install-Plugin {
 
-	try {
+	param([string] $temp, [string] $name)
 
-		Download-Repo -repo $gitLinks.repo -archive $gitLinks.archive -temp $tempDir
-		Install-Plugin -temp $tempDir -name $scriptDir
+	if (Test-Path "$env:TEMP\$temp\scripts\$name\main.lua") {
+
+		Write-Host "Installing..."
+		Path-CreateDirIfNotExists -p "$env:APPDATA\mpv\scripts"
+		Path-CreateDirIfNotExists -p "$env:APPDATA\mpv\script-opts"
+		Path-RemoveIfExists -p "$env:APPDATA\mpv\scripts\$name"
+		if (!(Test-Path "$env:APPDATA\mpv\script-opts\$name.conf")) { Move-Item "$env:TEMP\$temp\script-opts\$name.conf" "$env:APPDATA\mpv\script-opts" -Force > $null }
+		Move-Item "$env:TEMP\$temp\scripts\$name" "$env:APPDATA\mpv\scripts" -Force > $null
+		Remove-Item "$env:TEMP\$temp" -Recurse -Force > $null
 	}
-	catch {
+	else {
 
-		Write-Host "Plugin not installed: $($_.Exception.Message)"
-		Exit 1
+		throw "Files not found"
 	}
+}
+
+function Install-FFmpeg {
+
+	$wingetMessage = winget install --id Gyan.FFmpeg -e 2>&1 | Out-String
+	$wingetMessage = $wingetMessage -replace "(?m)^[^a-zA-Z]*", ""
 
 	if ($LASTEXITCODE -ne 0) {
 
-    	Exit 1
+		throw $wingetMessage
+	}
+}
+
+Write-Host "[DEPENDENCIES]"
+Write-Host "Checking..."
+
+if (Get-Command ffmpeg -ErrorAction SilentlyContinue) {
+
+	Write-Host "FFmpeg is OK!" -ForegroundColor Green
+}
+else {
+
+	try {
+
+		Install-FFmpeg
+	}
+	catch {
+
+		Write-Host "FFmpeg installation failed:" -ForegroundColor Red
+		Write-Host $($_.Exception.Message) -ForegroundColor Red
+		Exit 1
 	}
 
-	Write-Host "Done!"
+	Write-Host "FFmpeg is ready! (restart shell)" -ForegroundColor Green
+}
+
+Write-Host "[PLUGIN]"
+
+try {
+
+	Download-Repo -url $repoLink -temp $tempDir
+	Install-Plugin -temp $tempDir -name $pluginName
+}
+catch {
+
+	Write-Host "Plugin installation failed:" -ForegroundColor Red
+	Write-Host $($_.Exception.Message) -ForegroundColor Red
+	Exit 1
+}
+
+Write-Host "Plugin is ready!" -ForegroundColor Green

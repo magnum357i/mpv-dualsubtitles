@@ -5,7 +5,7 @@ set -e
 REPO_URL="https://github.com/magnum357i/mpv-dualsubtitles"
 PLUGIN_NAME="dualsubtitles"
 CONFIG_DIR="$HOME/.config/mpv"
-TMP_DIR="/tmp/git$PLUGIN_NAME"
+TMP_DIR="/tmp/gitmpv$PLUGIN_NAME"
 
 # checking dependices...
 
@@ -34,7 +34,6 @@ fi
 
 [ -d "$TMP_DIR" ] && rm -rf "$TMP_DIR"
 [ -d "$CONFIG_DIR/scripts/$PLUGIN_NAME" ] && rm -rf "$CONFIG_DIR/scripts/$PLUGIN_NAME"
-[ -f "$CONFIG_DIR/script-opts/$PLUGIN_NAME.conf" ] && rm -f "$CONFIG_DIR/script-opts/$PLUGIN_NAME.conf"
 
 # install
 
@@ -42,6 +41,6 @@ git clone --depth 1 "$REPO_URL" "$TMP_DIR"
 mkdir -p "$CONFIG_DIR/scripts"
 mkdir -p "$CONFIG_DIR/script-opts"
 mv "$TMP_DIR/scripts/$PLUGIN_NAME" "$CONFIG_DIR/scripts"
-mv "$TMP_DIR/script-opts/$PLUGIN_NAME.conf" "$CONFIG_DIR/script-opts"
+[ ! -f "$CONFIG_DIR/script-opts/$PLUGIN_NAME.conf" ] && mv "$TMP_DIR/script-opts/$PLUGIN_NAME.conf" "$CONFIG_DIR/script-opts"
 
 echo "Done!"
