@@ -345,19 +345,20 @@ mp.observe_property("track-list", "native", updateSubtitleList)
 
 if config.expand_subtitle_search then
 
+    local basePaths = mp.get_property_native("sub-file-paths")
+
     mp.add_hook("on_load", 50, function ()
 
         local newPaths = {}
-        local paths    = mp.get_property_native("sub-file-paths")
         local filename = mp.get_property("filename/no-ext")
 
-        for _, p in ipairs(paths) do
+        for _, p in ipairs(basePaths) do
 
             table.insert(newPaths, p)
             table.insert(newPaths, p.."/"..filename)
         end
 
-        if #newPaths > 0 then mp.set_property_native("sub-file-paths", newPaths) end
+        if next(newPaths) ~= nil then mp.set_property_native("sub-file-paths", newPaths) end
     end)
 end
 

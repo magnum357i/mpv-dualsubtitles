@@ -30,7 +30,7 @@ powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/mag
 ```
 
 > [!NOTE]
-> `winget` is used to install `ffmpeg`. This step is skipped if `ffmpeg` is installed.
+> `winget` is used to install `ffmpeg`. This step is skipped if `ffmpeg` is already installed.
 
 #### Linux
 
@@ -192,7 +192,7 @@ External subtitles loaded on startup can be automatically selected based on your
 
 ### Searching
 
-Set up the following options to auto-load subtitles from folders.
+Configure the following options to automatically load subtitles from folders.
 
 1) **mpv.conf**
 

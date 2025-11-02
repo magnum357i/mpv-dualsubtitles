@@ -1,4 +1,3 @@
-
 $ErrorActionPreference = "Stop"
 
 $pluginName = "dualsubtitles"
@@ -104,7 +103,7 @@ else {
 		Exit 1
 	}
 
-	Write-Host "FFmpeg is ready! (restart shell)" -ForegroundColor Green
+	Write-Host "FFmpeg is ready!" -ForegroundColor Green
 }
 
 Write-Host "[PLUGIN]"
