@@ -19,7 +19,7 @@ local this      = {
 
 local mergeStart
 
-local function filter(subtitle,wordsToFilter)
+local function filter(subtitle, wordsToFilter)
 
     if subtitle.forced                                                           then return false end
     if subtitle.title and h.searchStrings(subtitle.title:lower(), wordsToFilter) then return false end
@@ -44,25 +44,22 @@ end
 
 local function sdhKiller(text)
 
-    local count             = 0
-    local soundDescriptions = "[%[%(].-[%]%)]"
+    local count
     local speakerDash       = "%s*%-%s*"
+    local soundDescriptions = "[%[%(][^%]%)]-[%]%)]"
 
-    --sound descriptions with speaker lines (two lines)
-    text, count = text:gsub("^"..speakerDash..soundDescriptions.."%s*\\N"..speakerDash..soundDescriptions.."%s*$", "")
+    --sound descriptions with speaker dash (two lines)
+    _, count = text:gsub("^"..speakerDash..soundDescriptions.."%s*\\N"..speakerDash..soundDescriptions.."%s*$", "")
 
     if count > 0 then return "" end
 
-    --sound descriptions with speaker lines (first line)
-    text = text:gsub("^"..speakerDash..soundDescriptions.."%s*\\N%s*%-%s-", "")
+    --sound descriptions with speaker dash (first line)
+    text = text:gsub("^"..speakerDash..soundDescriptions.."%s*\\N"..speakerDash, "")
 
-    --sound descriptions with speaker lines (second line)
+    --sound descriptions with speaker dash (second line)
     text, count = text:gsub(speakerDash..soundDescriptions.."%s*$", "")
 
-    if count > 0 then
-
-        text = text:gsub("^"..speakerDash, "")
-    end
+    if count > 0 then text = text:gsub("^"..speakerDash, "") end
 
     --sound descriptions
     text = text:gsub("%s*"..soundDescriptions.."%s*", " ")
@@ -417,7 +414,7 @@ local function mergeSubtitles()
                     if shouldResample then resampler.resampleDialogue(line) end
                 elseif not line.Text:isShape() then
 
-                    local text = line.Text:stripped()
+                    local text = line.Text:notags()
 
                     if config.remove_repeating_lines then
 
@@ -500,8 +497,8 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Primary,<style1>
-Style: Secondary,<style2>
+<bottomstyle>
+<topstyle>
 <extrastyles>
 
 [Events]
@@ -509,8 +506,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
 ]]
 
-    header = header:gsub("<style1>", config.bottom_style:gsub("[^,]*:", ""))
-    header = header:gsub("<style2>", config.top_style:gsub("[^,]*:", ""))
+    header = header:gsub("<bottomstyle>", "Style: Primary,"..config.bottom_style:gsub("[^,]*:", ""))
+    header = header:gsub("<topstyle>",    "Style: Secondary,"..config.top_style:gsub("[^,]*:", ""))
 
     if next(styles) ~= nil then
 

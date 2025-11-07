@@ -1,4 +1,4 @@
---v1.2
+--v1.3
 local ass = {}
 
 ass.__index = ass
@@ -45,12 +45,21 @@ local function newText(str)
 
             stripped = function(self)
 
-                strippedText = self.original
+                text = self.original
                 :gsub("%{[^%}]*%}", "")
                 :gsub("\\[nNh]", " ")
                 :gsub("%s+", " ")
 
-                return strippedText
+                return text
+            end,
+
+            notags = function(self)
+
+                text = self.original
+                :gsub("%{[^%}]*%}", "")
+                :gsub("%s+", " ")
+
+                return text
             end,
 
             isSign = function(self)
@@ -62,11 +71,6 @@ local function newText(str)
 
                 return self.original:find("%}%s*m%s+%d+%s+%d+") and true or false
             end,
-
-            isEmpty = function(self)
-
-                return (self.original == "" or self.original:gsub("%s+", "") == "") and true or false
-            end
         },
 
         __tostring = function(self) return self.original end
