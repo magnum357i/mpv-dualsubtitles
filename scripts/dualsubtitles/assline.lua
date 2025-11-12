@@ -53,7 +53,7 @@ local function newText(str)
                 return text
             end,
 
-            notags = function(self)
+            noTags = function(self)
 
                 text = self.original
                 :gsub("%{[^%}]*%}", "")

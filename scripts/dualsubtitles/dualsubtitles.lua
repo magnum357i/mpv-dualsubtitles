@@ -1,6 +1,7 @@
 local mp        = require "mp"
 local msg       = require "mp.msg"
 local utils     = require "mp.utils"
+local assdraw   = require "mp.assdraw"
 local h         = require "helpers"
 local subtitle  = require "subtitle"
 local resampler = require "resampler"
@@ -17,7 +18,28 @@ local this      = {
     tempDir        = "mpvdualsubtitles"
 }
 
-local mergeStart
+local overlay   = mp.create_osd_overlay("ass-events")
+local merge     = {
+    current             = nil,
+    progress            = {},
+    progressHandler     = nil,
+    progressTimer       = nil,
+    progressBase        = 0,
+    active              = nil,
+    total               = 0,
+    start               = 0,
+    data                = {},
+    defaultErrorMessage = "See the console for details.",
+    flags               = {
+
+        COPY               = 1,
+        GETDURATION        = 2,
+        EXTRACT            = 3,
+        CONVERT_TEXTBASED  = 4,
+        CONVERT_IMAGEBASED = 5,
+        MERGE              = 6
+    }
+}
 
 local function filter(subtitle, wordsToFilter)
 
@@ -93,6 +115,17 @@ local function getSubtitleList()
     this.prevTrackCount = #tracks
 
     return list
+end
+
+local function copyCommand(s, t)
+
+    if path.platform() == "windows" then
+
+        return {"powershell", "-NoProfile", "-Command", string.format("Copy-Item -LiteralPath \"%s\" -Destination \"%s\" -Force", s, t)}
+    else
+
+        return {"cp", s, t}
+    end
 end
 
 local function mergeLanguages(configLangKey, map)
@@ -331,33 +364,113 @@ local function getSidByLanguage(configLangKey, langMap)
     return selectedSubtitles[1] and selectedSubtitles[1].id or 0
 end
 
-local function copySubtitleToTemp(subtitle, key)
+local function updateOverlay(content, x, y)
 
-    local message    = ""
-    local sourceFile = subtitle.path
-    local targetFile = this.getPath("cache/"..key.."file")
-    local result
+    if overlay.data == content and overlay.res_x == 1280 and overlay.res_y == 720 then return end
 
-    if subtitle.ext == ".ass" then
+    overlay.data  = content
+    overlay.res_x = (x and x > 0) and x or 1280
+    overlay.res_y = (y and y > 0) and x or 720
+    overlay.z     = 2000
 
-        if path.platform() == "windows" then
-
-            h.runCommand({"powershell", "-NoProfile", "-Command", string.format("Copy-Item -LiteralPath \"%s\" -Destination \"%s\" -Force", sourceFile, targetFile)})
-        else
-
-            h.runCommand({"cp", sourceFile, targetFile})
-        end
-    else
-
-        result = h.runCommand({"ffmpeg", "-i", sourceFile, "-c:s", "ass", targetFile})
-
-        if result.status == -3 then message = "FFmpeg not installed." end
-    end
-
-    return path.checkPath(targetFile), message
+    overlay:update()
 end
 
-local function mergeSubtitles()
+function merge.closeGui()
+
+    updateOverlay("", 0, 0)
+
+    merge.active = false
+
+    mp.remove_key_binding("dualsubtitles_closegui")
+end
+
+function merge.statusGui()
+
+    local ass  = assdraw.ass_new()
+    local posX = merge.data.marginX
+    local posY = merge.data.marginY
+
+    local header = function (title)
+
+        ass:new_event()
+        ass:an(7)
+        ass:pos(posX, posY)
+        ass:append(string.format("{\\bord%s\\fs%s\\b1}%s", merge.data.borderSize, merge.data.fontSize, title))
+
+        posY = posY + merge.data.fontSize
+    end
+
+    local steps = function (titles)
+
+        for i, z in ipairs(titles) do
+
+            ass:new_event()
+            ass:an(7)
+            ass:pos(posX, posY)
+
+            if merge.progress[i] then
+
+                if merge.progress[i] == 100 then
+
+                    ass:append(string.format("{\\bord%s\\fs%s}%s", merge.data.borderSize, merge.data.fontSize, merge.data.tab..merge.data.completedSymbol.." "..z))
+                else
+
+                    ass:append(string.format("{\\bord%s\\fs%s}%s... (%s%%)", merge.data.borderSize, merge.data.fontSize, merge.data.tab..z, merge.progress[i]))
+                end
+            else
+
+                ass:append(string.format("{\\bord%s\\fs%s\\alpha&H%x&}%s", merge.data.borderSize, merge.data.fontSize, merge.data.alpha, merge.data.tab..z))
+            end
+
+            posY = posY + merge.data.fontSize
+        end
+    end
+
+    header("Merging Subtitles")
+    steps({"Extracting or copying", "Converting", "Finishing up"})
+
+    if not merge.active then
+
+        posY          = posY + merge.data.fontSize
+        local elapsed = mp.get_time() - merge.start
+
+        ass:new_event()
+        ass:an(7)
+        ass:pos(posX, posY)
+        ass:append(string.format("{\\bord%s\\fs%s}%s", merge.data.borderSize, merge.data.fontSize, string.format("Took {\\b1}%d{\\b0} seconds. Press <ESC> to exit.", elapsed)))
+    end
+
+    updateOverlay(ass.text)
+end
+
+function merge.updateProgress(step, percent)
+
+    if merge.progress[step] == nil then merge.progressBase = 0 end
+
+    local p          = percent
+    local twoActions = false
+
+    if this.top then
+
+        twoActions = true
+
+        if merge.current == merge.flags.EXTRACT and not (this.bottom.external and this.top.external) then twoActions = false end
+    end
+
+    if twoActions then p = p / 2 end
+
+    merge.progress[step] = merge.progressBase + math.floor(p)
+
+    if twoActions and percent == 100 then
+
+        merge.progressBase = 50
+    end
+
+    merge.statusGui()
+end
+
+function merge.process()
 
     local data = {
 
@@ -369,7 +482,7 @@ local function mergeSubtitles()
 
     for _, v in ipairs(data) do
 
-        local sPath   = this.getPath("cache/"..v.subType.."file")
+        local sPath   = this.getPath("cache/"..v.subType.."file"):gsub("<ext>", ".ass")
         local content = path.readFile(sPath)
 
         if content then
@@ -414,7 +527,7 @@ local function mergeSubtitles()
                     if shouldResample then resampler.resampleDialogue(line) end
                 elseif not line.Text:isShape() then
 
-                    local text = line.Text:notags()
+                    local text = line.Text:noTags()
 
                     if config.remove_repeating_lines then
 
@@ -475,16 +588,13 @@ local function mergeSubtitles()
                 prevStyle = line.Style
             end
 
+            merge.updateProgress(3, 100)
+
             path.removeFile(sPath)
         end
     end
 
-    if not (data[1].ready or data[2].ready) then
-
-        h.notify("There is a missing or corrupted subtitle.", "mergesubtitles", "error", 30)
-
-        return
-    end
+    if not data[1].ready and not data[2].ready then error("There is a missing or corrupted subtitle.") end
 
     local header = [[
 [Script Info]
@@ -520,9 +630,38 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     path.createFile(this.getPath("cache/mergedfile"), header..table.concat(lines, "\n"))
 end
 
-local function tryMerge()
+function merge.reset()
 
-    local ok, err = pcall(mergeSubtitles)
+    merge.start   = 0
+    merge.current = merge.flags.COPY
+    merge.total   = 0
+
+    h.clearTable(merge.progress)
+    h.clearTable(merge.data)
+end
+
+function merge.preapare()
+
+    path.createDir(this.getPath("cache/merge"))
+
+    merge.active = true
+    merge.start  = mp.get_time()
+end
+
+function merge.fillData()
+
+    merge.data.borderSize      = mp.get_property_number("osd-border-size")
+    merge.data.fontSize        = mp.get_property_number("osd-font-size")
+    merge.data.marginX         = mp.get_property_number("osd-margin-x")
+    merge.data.marginY         = mp.get_property_number("osd-margin-y")
+    merge.data.tab             = string.rep("\\h", 4)
+    merge.data.alpha           = 150
+    merge.data.completedSymbol = "✓"
+end
+
+function merge.try()
+
+    local ok, err = pcall(merge.process)
 
     if ok then
 
@@ -532,16 +671,385 @@ local function tryMerge()
         mp.commandv("sub-add", this.getPath("cache/mergedfile"))
         this.updateList(0)
 
-        this.merged   = this.subtitles[mp.get_property_number("sid")]
-        local elapsed = mp.get_time() - mergeStart
-        mergeStart    = nil
+        this.merged = this.subtitles[mp.get_property_number("sid")]
 
-        h.notify(string.format("Subtitles merged. Took %d seconds.", elapsed), "mergesubtitles", "info", 10)
+        mp.add_forced_key_binding("esc", "dualsubtitles_closegui", function()
+
+            merge.closeGui()
+        end)
     else
 
+        merge.closeGui()
+
         h.notify(err, "mergesubtitles", "error")
-        h.notify("See the console for details.", "mergesubtitles", "error")
+        h.notify(merge.defaultErrorMessage, "mergesubtitles", "error")
     end
+end
+
+function merge.runNext()
+
+    if merge.current == merge.flags.COPY then
+
+        merge.preapare()
+        merge.updateProgress(1, 0)
+
+        local shouldExtract = false
+
+        for _, k in ipairs({"bottom", "top"}) do
+
+            local subtitle = this[k]
+
+            if subtitle then
+
+                if subtitle.external then
+
+                    local sourceFile = subtitle.path
+                    local targetFile = this.getPath(string.format("cache/%sfile", k)):gsub("<ext>", subtitle.ext)
+                    local result     = h.runCommand(copyCommand(sourceFile, targetFile))
+
+                    if result.status == 0 then
+
+                        merge.updateProgress(1, 100)
+                    else
+
+                        merge.closeGui()
+
+                        h.notify(merge.defaultErrorMessage, "commandfailed", "error")
+
+                        return
+                    end
+                else
+
+                    shouldExtract = true
+                end
+            end
+        end
+
+        merge.current = shouldExtract and merge.flags.GETDURATION or merge.flags.CONVERT_TEXTBASED
+
+        merge.runNext()
+    elseif merge.current == merge.flags.GETDURATION then
+
+        local args = {}
+
+        table.insert(args, "ffprobe")
+        table.insert(args, "-v")
+        table.insert(args, "error")
+        table.insert(args, "-show_entries")
+        table.insert(args, "format=duration")
+        table.insert(args, "-of")
+        table.insert(args, "default=noprint_wrappers=1:nokey=1")
+        table.insert(args, this.getPath("videofile"))
+
+        h.runCommandAsync(args,
+
+            function(result)
+
+                merge.total   = tonumber(result.stdout)
+                merge.current = merge.flags.EXTRACT
+
+                merge.runNext()
+            end,
+
+            function(result, status, default)
+
+                merge.closeGui()
+
+                if status == -3 then
+
+                    h.notify("FFmpeg is not installed. Please install it first.", "missingdependencies", "error")
+                else
+
+                    h.notify(merge.defaultErrorMessage, "ffmpeg", "error")
+                end
+            end
+        )
+    elseif merge.current == merge.flags.EXTRACT then
+
+        local args = {}
+
+        if path.platform() == "windows" then
+
+            table.insert(args, "cmd")
+            table.insert(args, "/c")
+        else
+
+            table.insert(args, "bash")
+            table.insert(args, "-c")
+        end
+
+        table.insert(args, "ffmpeg")
+        table.insert(args, "-i")
+        table.insert(args, this.getPath("videofile"))
+
+        if this.bottom and not this.bottom.external then
+
+            local bottomFile = this.getPath("cache/bottomfile"):gsub("<ext>", this.bottom.ext)
+
+            table.insert(args, "-map")
+            table.insert(args, string.format("0:s:%s", this.bottom.id - 1))
+            table.insert(args, "-c")
+            table.insert(args, "copy")
+            table.insert(args, bottomFile)
+        end
+
+        if this.top and not this.top.external then
+
+            local topFile = this.getPath("cache/topfile"):gsub("<ext>", this.top.ext)
+
+            table.insert(args, "-map")
+            table.insert(args, string.format("0:s:%s", this.top.id - 1))
+            table.insert(args, "-c")
+            table.insert(args, "copy")
+            table.insert(args, topFile)
+        end
+
+        table.insert(args, "-vn")
+        table.insert(args, "-an")
+        table.insert(args, "-dn")
+        table.insert(args, "-y")
+        table.insert(args, "-progress")
+        table.insert(args, "pipe:1")
+        table.insert(args, ">")
+        table.insert(args, this.getPath("cache/progressfile"))
+
+        local lastPos = 0
+
+        merge.progressTimer = mp.add_periodic_timer(0.5, function()
+
+            if merge.progressHandler then
+
+                merge.progressHandler:seek("set", lastPos)
+
+                local newContent = merge.progressHandler:read("*all")
+                lastPos          = merge.progressHandler:seek()
+                local ms         = newContent:match("out_time_ms=(%d+)")
+
+                if ms then
+
+                    ms            = ms / 1000000
+                    local percent = (ms / merge.total) * 100
+
+                    merge.updateProgress(1, percent)
+                end
+            else
+
+                merge.progressHandler = io.open(this.getPath("cache/progressfile"), "r")
+            end
+        end)
+
+        h.runCommandAsync(args,
+
+            function()
+
+                merge.updateProgress(1, 100)
+
+                merge.current = merge.flags.CONVERT_TEXTBASED
+
+                merge.runNext()
+            end,
+
+            function(result, status, default)
+
+                merge.closeGui()
+
+                if string.find(result, "No such file or directory") then
+
+                    h.notify("No such file or directory.", "ffmpeg", "error")
+                elseif string.find(result, "Failed to set value") then
+
+                    h.notify("Wrong subtitle id.", "ffmpeg", "error")
+                else
+
+                    h.notify(merge.defaultErrorMessage, "ffmpeg", "error")
+                end
+            end,
+
+            function()
+
+                path.removeFile(this.getPath("cache/progressfile"))
+
+                if merge.progressTimer   then merge.progressTimer:kill()                                end
+                if merge.progressHandler then merge.progressHandler:close() merge.progressHandler = nil end
+            end
+        )
+    elseif merge.current == merge.flags.CONVERT_TEXTBASED then
+
+        merge.updateProgress(2, 0)
+
+        for _, k in ipairs({"bottom", "top"}) do
+
+            local subtitle = this[k]
+
+            if subtitle then
+
+                if subtitle.ext == ".srt" then
+
+                    local args       = {}
+                    local sourceFile = this.getPath(string.format("cache/%sfile", k)):gsub("<ext>", this[k].ext)
+                    local targetFile = this.getPath(string.format("cache/%sfile", k)):gsub("<ext>", ".ass")
+
+                    table.insert(args, "ffmpeg")
+                    table.insert(args, "-i")
+                    table.insert(args, sourceFile)
+                    table.insert(args, targetFile)
+
+                    local result = h.runCommand(args)
+
+                    if result.status ~= 0 then
+
+                        merge.closeGui()
+
+                        h.notify(merge.defaultErrorMessage, "ffmpeg", "error")
+
+                        return
+                    end
+
+                    path.removeFile(sourceFile)
+
+                    merge.updateProgress(2, 100)
+                elseif subtitle.ext == ".ass" then
+
+                    merge.updateProgress(2, 100)
+                end
+            end
+        end
+
+        merge.current = merge.flags.CONVERT_IMAGEBASED
+
+        merge.runNext()
+    elseif merge.current == merge.flags.CONVERT_IMAGEBASED then
+
+        local convertProcess = function(key, success)
+
+            if not this[key] or this[key].ext ~= ".sup" then success() return end
+
+            local args       = {}
+            local sourceFile = this.getPath(string.format("cache/%sfile", key)):gsub("<ext>", this[key].ext)
+
+            if path.platform() == "windows" then
+
+                table.insert(args, "cmd")
+                table.insert(args, "/c")
+            else
+
+                table.insert(args, "bash")
+                table.insert(args, "-c")
+            end
+
+            table.insert(args, "subtitleedit")
+            table.insert(args, "/convert")
+            table.insert(args, sourceFile)
+            table.insert(args, "AdvancedSubStationAlpha")
+            table.insert(args, ">")
+            table.insert(args, this.getPath("cache/progressfile"))
+
+            local lastPos = 0
+
+            merge.progressTimer = mp.add_periodic_timer(0.5, function()
+
+                if merge.progressHandler then
+
+                    merge.progressHandler:seek("set", lastPos)
+
+                    local newContent = merge.progressHandler:read("*all")
+                    lastPos          = merge.progressHandler:seek()
+                    local percent    = newContent:match("(%d+)%%")
+
+                    if percent then merge.updateProgress(2, percent) end
+                else
+
+                    merge.progressHandler = io.open(this.getPath("cache/progressfile"), "r")
+                end
+            end)
+
+            h.runCommandAsync(args,
+
+                function()
+
+                    merge.updateProgress(2, 100)
+
+                    success()
+                end,
+
+                function(result, status, default)
+
+                    merge.closeGui()
+
+                    if status == 1 then
+
+                        h.notify("Subtitle Edit is not installed. Please install it first.", "missingdependencies", "error")
+                    else
+
+                        h.notify(merge.defaultErrorMessage, "mergesubtitles", "error")
+                    end
+                end,
+
+                function()
+
+                    path.removeFile(this.getPath("cache/progressfile"))
+                    path.removeFile(sourceFile)
+
+                    if merge.progressTimer   then merge.progressTimer:kill()                                end
+                    if merge.progressHandler then merge.progressHandler:close() merge.progressHandler = nil end
+                end
+            )
+        end
+
+        convertProcess("bottom", function()
+
+            convertProcess("top", function()
+
+                merge.current = merge.flags.MERGE
+
+                merge.runNext()
+            end)
+        end)
+    elseif merge.current == merge.flags.MERGE then
+
+        merge.active = false
+
+        merge.updateProgress(3, 0)
+        merge.try()
+        merge.reset()
+    end
+end
+
+function this.merge()
+
+    if this.merged then
+
+        merge.closeGui()
+
+        h.notify("Merged subtitle already exists.", "mergesubtitles", "error")
+
+        return
+    end
+
+    if merge.active then return end
+
+    if not this.bottom then
+
+        h.notify("Bottom subtitle is required.", "mergesubtitles", "error")
+
+        return
+    end
+
+    for _, k in ipairs({"bottom", "top"}) do
+
+        local allowedExtensions = {".srt", ".ass", ".sup"}
+
+        if this[k] and (not this[k].ext or not h.hasItem(allowedExtensions, this[k].ext)) then
+
+            h.notify(string.format("The %s subtitle isn’t in the correct format (srt, ass, sup).", k), "mergesubtitles", "error")
+
+            return
+        end
+    end
+
+    merge.reset()
+    merge.fillData()
+    merge.runNext()
 end
 
 function this.deleteMerged()
@@ -555,113 +1063,6 @@ function this.deleteMerged()
     this.merged = nil
 
     return true
-end
-
-function this.merge()
-
-    if not (this.bottom and this.top) then
-
-        h.notify("Two subtitles are required to merge.", "mergesubtitles", "error")
-
-        return
-    end
-
-    if not (this.bottom.textbased and this.top.textbased) then
-
-        h.notify("One of the selected subtitles is not text-based.", "mergesubtitles", "error")
-
-        return
-    end
-
-    h.notify("Please wait...", "mergesubtitles", "info", 9999)
-
-    mergeStart = mp.get_time()
-
-    path.createDir(this.getPath("cache/merge"))
-
-    local remainingSubtitles = 2
-    local cStatus, cErrorMessage
-
-    for _, k in ipairs({"bottom", "top"}) do
-
-        local subtitle = this[k]
-
-        if subtitle.external then
-
-            cStatus, cErrorMessage = copySubtitleToTemp(subtitle, k)
-
-            if cStatus then
-
-                remainingSubtitles = remainingSubtitles - 1
-            else
-
-                break
-            end
-        end
-    end
-
-    if cErrorMessage then
-
-        h.notify(cErrorMessage, "mergesubtitles", "error")
-
-        return
-    end
-
-    if remainingSubtitles == 0 then
-
-        tryMerge()
-
-        return
-    end
-
-    local args = {}
-
-    table.insert(args, "ffmpeg")
-    table.insert(args, "-i")
-    table.insert(args, this.getPath("videofile"))
-
-    if this.bottom and not this.bottom.external then
-
-        table.insert(args, "-map")
-        table.insert(args, string.format("0:s:%s", this.bottom.id - 1))
-        table.insert(args, "-c:s")
-        table.insert(args, "ass")
-        table.insert(args, this.getPath("cache/bottomfile"))
-    end
-
-    if this.top and not this.top.external then
-
-        table.insert(args, "-map")
-        table.insert(args, string.format("0:s:%s", this.top.id - 1))
-        table.insert(args, "-c:s")
-        table.insert(args, "ass")
-        table.insert(args, this.getPath("cache/topfile"))
-    end
-
-    table.insert(args, "-vn")
-    table.insert(args, "-an")
-    table.insert(args, "-dn")
-    table.insert(args, "-y")
-
-    local onSubtitleFail = function(result, status)
-
-        if status == -3 then
-
-            h.notify("FFmpeg not installed.", "mergesubtitles", "error")
-        elseif string.find(result, "No such file or directory") then
-
-            h.notify("No such file or directory.", "mergesubtitles", "error")
-        elseif string.find(result, "Failed to set value") then
-
-            h.notify("Wrong subtitle id.", "mergesubtitles", "error")
-        else
-
-            h.log(result)
-            h.notify("See the console for details.", "mergesubtitles", "error")
-        end
-    end
-
-    h.runCommandAsync(args, tryMerge, onSubtitleFail)
 end
 
 function this.isMergedSelected()
@@ -698,13 +1099,16 @@ function this.getPath(key)
         return path.join({"%temp", this.tempDir, this.hash})
     elseif key == "cache/bottomfile" then
 
-        return path.join({"%temp", this.tempDir, this.hash, "primary.ass"})
+        return path.join({"%temp", this.tempDir, this.hash, "primary<ext>"})
     elseif key == "cache/topfile" then
 
-        return path.join({"%temp", this.tempDir, this.hash, "secondary.ass"})
+        return path.join({"%temp", this.tempDir, this.hash, "secondary<ext>"})
     elseif key == "cache/mergedfile" then
 
         return path.join({"%temp", this.tempDir, this.hash, "merged.ass"})
+    elseif key == "cache/progressfile" then
+
+        return path.join({"%temp", this.tempDir, this.hash, "progress.txt"})
     end
 
     return nil

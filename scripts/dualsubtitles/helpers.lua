@@ -97,7 +97,7 @@ function this.searchStrings(value, items)
     return false
 end
 
-function this.runCommandAsync(args, handleSuccess, handleFail)
+function this.runCommandAsync(args, handleSuccess, handleFail, runAlways)
 
     return mp.command_native_async({
 
@@ -110,12 +110,18 @@ function this.runCommandAsync(args, handleSuccess, handleFail)
 
     function(_, result, _)
 
+        if runAlways then runAlways() end
+
+        if result.killed_by_us then return end
+
         if result.status == 0 then
 
-            handleSuccess()
+            handleSuccess(result)
         else
 
             this.log(args)
+            this.log(result)
+
             handleFail(result.stderr, result.status)
         end
     end)
@@ -123,7 +129,7 @@ end
 
 function this.runCommand(args)
 
-    return mp.command_native({
+    local result = mp.command_native({
 
         name           = 'subprocess',
         playback_only  = false,
@@ -131,6 +137,14 @@ function this.runCommand(args)
         capture_stderr = true,
         args           = args
     })
+
+    if result.status ~= 0 then
+
+        this.log(args)
+        this.log(result)
+    end
+
+    return result
 end
 
 function this.hash(str)
