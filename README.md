@@ -162,6 +162,12 @@ detect_italics=yes
 
 # Prevents you from seeing the same text 20 times on the screen.
 remove_repeating_lines=yes
+
+# Save Settings
+# Example: moviename.dual.srt (if save_path is set to video)
+save_filename=dual
+# Valid options: <empty> = <temp> | video = <samefolderasvideo> | <yourpath>
+save_path=
 ```
 
 # External Subtitles
@@ -217,6 +223,26 @@ Merging subtitles allows you to have more styling options.
 
 > [!NOTE]
 > Merged subtitles are a single subtitle file, so secondary options no longer apply. Even so, all features provided by this plugin, such as **swap** and **hide**, still apply to it.
+
+### Saving Options
+
+1. Temp (leave empty):
+
+```ini
+save_path=
+```
+
+2. Same folder as video (for compatibility with programs like Jellyfin and Plex):
+
+```ini
+save_path=video
+```
+
+3. Custom path:
+
+```ini
+save_path=C:\Users\<user>\Desktop\dualsubtitles
+```
 
 # Copy Subtitles
 

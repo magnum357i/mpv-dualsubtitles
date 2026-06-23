@@ -117,6 +117,15 @@ local function getSubtitleList()
     return list
 end
 
+local function getMergedId()
+
+    local mId
+
+    for _, subtitle in ipairs(this.subtitles) do if subtitle.path == this.getPath("cache/mergedfile") and subtitle.id then mId = subtitle.id break end end
+
+    return mId
+end
+
 local function copyCommand(s, t)
 
     if path.platform() == "windows" then
@@ -628,6 +637,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     end
 
     path.createFile(this.getPath("cache/mergedfile"), header..table.concat(lines, "\n"))
+
+    if config.save_path == "video" then path.removeDir(this.getPath("cache/merge")) end
 end
 
 function merge.reset()
@@ -671,7 +682,7 @@ function merge.try()
         mp.commandv("sub-add", this.getPath("cache/mergedfile"))
         this.updateList(0)
 
-        this.merged = this.subtitles[mp.get_property_number("sid")]
+        this.merged = this.subtitles[getMergedId()]
 
         mp.add_forced_key_binding("esc", "dualsubtitles_closegui", function()
 
@@ -1058,7 +1069,13 @@ function this.deleteMerged()
 
     mp.commandv("sub-remove", this.merged.id)
 
-    path.removeDir(this.getPath("cache/merge"))
+    if config.save_path == "video" then
+
+        path.removeDir(this.getPath("cache/mergedfile"))
+    else
+
+        path.removeDir(this.getPath("cache/merge"))
+    end
 
     this.merged = nil
 
@@ -1074,7 +1091,8 @@ end
 
 function this.getPath(key)
 
-    this.hash = this.hash or h.hash(mp.get_property("path"))
+    this.hash      = this.hash or h.hash(mp.get_property("path"))
+    local savePath = (config.save_path == "" or config.save_path == "video") and path.join({"%temp", this.tempDir}) or config.save_path:gsub("[\\//]$", "")
 
     if key == "csvfile" then
 
@@ -1090,25 +1108,30 @@ function this.getPath(key)
         return mp.get_property("path")
     elseif key == "cache/languagefile" then
 
-        return path.join({"%temp", this.tempDir, "cachedlanguages.json"})
+        return path.join({savePath, "cachedlanguages.json"})
     elseif key == "cache" then
 
-        return path.join({"%temp", this.tempDir})
+        return path.join({savePath})
     elseif key == "cache/merge" then
 
-        return path.join({"%temp", this.tempDir, this.hash})
+        return path.join({savePath, this.hash})
     elseif key == "cache/bottomfile" then
 
-        return path.join({"%temp", this.tempDir, this.hash, "primary<ext>"})
+        return path.join({savePath, this.hash, "primary<ext>"})
     elseif key == "cache/topfile" then
 
-        return path.join({"%temp", this.tempDir, this.hash, "secondary<ext>"})
+        return path.join({savePath, this.hash, "secondary<ext>"})
     elseif key == "cache/mergedfile" then
 
-        return path.join({"%temp", this.tempDir, this.hash, "merged.ass"})
+        return
+            config.save_path == "video"
+                and
+            string.format("%s.%s.ass", mp.get_property("path"):gsub("%.[^%.]-$", ""), config.save_filename)
+                or
+            path.join({savePath, this.hash, "merged.ass"})
     elseif key == "cache/progressfile" then
 
-        return path.join({"%temp", this.tempDir, this.hash, "progress.txt"})
+        return path.join({savePath, this.hash, "progress.txt"})
     end
 
     return nil
@@ -1165,9 +1188,23 @@ end
 
 function this.loadMerged()
 
-    if path.checkPath(this.getPath("cache/mergedfile")) then
+    local file = this.getPath("cache/mergedfile")
 
-        mp.commandv("sub-add", this.getPath("cache/mergedfile"))
+    if path.checkPath(file) then
+
+        if config.save_path == "video" then
+
+            local mId = getMergedId()
+
+            this.set(mId, 0)
+            this.display()
+
+            this.merged = this.subtitles[mId]
+
+            return true
+        end
+
+        mp.commandv("sub-add", file)
 
         local loaded = mp.get_property_native("current-tracks/sub")
         this.merged  = subtitle:new(loaded)

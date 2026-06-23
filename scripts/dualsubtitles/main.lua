@@ -4,7 +4,7 @@ https://github.com/magnum357i/mpv-dualsubtitles/
 
 ╔════════════════════════════════╗
 ║        MPV dualsubtitles       ║
-║              v2.3.4            ║
+║              v2.3.5            ║
 ╚════════════════════════════════╝
 
 ## Required ##
@@ -50,7 +50,9 @@ config = {
 
     --misc
     expand_subtitle_search = false,
-    copy_format            = "(%s) %s"
+    copy_format            = "(%s) %s",
+    save_filename          = "dual",
+    save_path              = "" --<empty> = <temp> | video = <samefolderasvideo> | <yourpath>
 }
 
 options.read_options(config)
@@ -97,9 +99,7 @@ end
 
 local function deleteMergedFile()
 
-    local ok
-
-    ok = dual.deleteMerged()
+    local ok = dual.deleteMerged()
 
     if ok then
 
